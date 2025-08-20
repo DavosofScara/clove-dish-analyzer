@@ -1,0 +1,7 @@
+[theme]
+base="dark"
+primaryColor="#A9DFBF"          # Clove green
+backgroundColor="#111111"
+secondaryBackgroundColor="#222222"
+textColor="#F0F0F0"
+font="sans serif"
