@@ -107,99 +107,82 @@ if price_file:
         st.error(f"❌ Could not read price file: {e}")
 
 # --- PDF Generation Function ---
-from fpdf import FPDF
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
 from datetime import date
 import tempfile
 
-def to_latin1(s):
-    try:
-        return s.encode("latin-1", "ignore").decode("latin-1")
-    except:
-        return ""
-
 def generate_pdf(df):
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    # Logo and header
-    pdf.image("clove_logo.png", x=80, w=50)
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, to_latin1("Clove Dish Analysis Report"), ln=True, align="C")
-    pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 10, to_latin1(f"Date: {date.today().strftime('%B %d, %Y')}"), ln=True, align="C")
-    pdf.ln(10)
-
-    # Summary Table
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, to_latin1("Dish Summary"), ln=True)
-    pdf.set_font("Helvetica", "", 10)
-
+    # Create temporary file
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    doc = SimpleDocTemplate(tmp_file.name, pagesize=letter)
+    
+    # Get styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        spaceAfter=30,
+        alignment=1  # Center alignment
+    )
+    
+    # Build story (content)
+    story = []
+    
+    # Title
+    story.append(Paragraph("Clove Dish Analysis Report", title_style))
+    story.append(Paragraph(f"Date: {date.today().strftime('%B %d, %Y')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    # Dish Summary Table
+    story.append(Paragraph("Dish Summary", styles['Heading2']))
+    story.append(Spacer(1, 12))
+    
+    # Create table data
+    table_data = [['Dish Name', 'Cost (€)', 'Margin (%)', 'CO₂e (kg)', 'Flags']]
+    
     for _, row in df.iterrows():
         flag_raw = row.get("Flag", "")
         flag_clean = str(flag_raw).replace("⚠️", "Warning").replace("🌍", "High CO2")
-        line = (
-            f"{row['Dish Name']} | Cost: €{row['Total Cost (€)']:.2f} | "
-            f"Margin: {row['Margin (%)']}% | CO2e: {row['Estimated CO₂e (kg)']}kg | {flag_clean}"
-        )
-        try:
-            safe_line = to_latin1(str(line))
-            if safe_line.strip():
-                pdf.multi_cell(0, 7, safe_line)
-        except Exception:
-            pdf.multi_cell(0, 7, "⚠️ Line could not be displayed.")
-
+        table_data.append([
+            str(row['Dish Name']),
+            f"€{row['Total Cost (€)']:.2f}",
+            f"{row['Margin (%)']}%",
+            f"{row['Estimated CO₂e (kg)']}kg",
+            flag_clean
+        ])
+    
+    # Create table
+    table = Table(table_data, colWidths=[2*inch, 1*inch, 1*inch, 1*inch, 1.5*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    
+    story.append(table)
+    story.append(Spacer(1, 20))
+    
     # Key Observations
     low_margin = df[df["Margin (%)"] < 60].shape[0]
     high_co2 = df[df["Estimated CO₂e (kg)"] > 3].shape[0]
-    observations = (
-        f"{low_margin} dish(es) have a margin below 60%.\n"
-        f"{high_co2} dish(es) exceed 3kg CO₂e emissions."
-    )
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, to_latin1("Key Observations"), ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(0, 6, to_latin1(observations))
-
-    # --- Chart 1: CO₂e Footprint per Dish ---
-    fig1, ax1 = plt.subplots(figsize=(6, 4))
-    sns.barplot(data=df.sort_values("Estimated CO₂e (kg)", ascending=False),
-                x="Estimated CO₂e (kg)", y="Dish Name", palette="Reds_r", ax=ax1)
-    ax1.set_title("CO₂e Footprint per Dish")
-    chart1_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
-    fig1.tight_layout()
-    fig1.savefig(chart1_path)
-    plt.close(fig1)
-
-    # --- Chart 2: Top Dishes by Margin ---
-    fig2, ax2 = plt.subplots(figsize=(6, 4))
-    sns.barplot(data=df.sort_values("Margin (%)", ascending=False),
-                x="Margin (%)", y="Dish Name", palette="Greens_r", ax=ax2)
-    ax2.set_title("Top Dishes by Margin")
-    chart2_path = tempfile.NamedTemporaryFile(delete=False, suffix=".png").name
-    fig2.tight_layout()
-    fig2.savefig(chart2_path)
-    plt.close(fig2)
-
-    # Insert both charts side by side
-    pdf.ln(5)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(90, 6, to_latin1("CO₂e per Dish"), ln=0)
-    pdf.cell(90, 6, to_latin1("Top Dishes by Margin"), ln=1)
-
-    y = pdf.get_y()
-    pdf.image(chart1_path, x=10, y=y, w=90)
-    pdf.image(chart2_path, x=110, y=y, w=90)
-    pdf.ln(60)
-
-    # Cleanup temp chart files
-    os.remove(chart1_path)
-    os.remove(chart2_path)
-
-    # Save to temporary file
-    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    pdf.output(tmp_file.name)
+    
+    story.append(Paragraph("Key Observations", styles['Heading2']))
+    story.append(Paragraph(f"• {low_margin} dish(es) have a margin below 60%", styles['Normal']))
+    story.append(Paragraph(f"• {high_co2} dish(es) exceed 3kg CO₂e emissions", styles['Normal']))
+    
+    # Build PDF
+    doc.build(story)
+    
     return tmp_file.name
 
 # --- Load Dish File ---
