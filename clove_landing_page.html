@@ -160,6 +160,29 @@
             }
         }
     </style>
+    <script>
+        // Check if iframe loads successfully
+        window.addEventListener('load', function() {
+            const iframe = document.getElementById('streamlit-iframe');
+            const redirectOption = document.getElementById('redirect-option');
+            
+            // Try to detect if iframe loaded successfully
+            setTimeout(function() {
+                try {
+                    // If iframe is accessible, show it
+                    if (iframe.contentWindow && iframe.contentWindow.document) {
+                        iframe.style.display = 'block';
+                        redirectOption.style.display = 'none';
+                    }
+                } catch (e) {
+                    // If iframe is blocked, show redirect option
+                    console.log('Iframe blocked, showing redirect option');
+                    iframe.style.display = 'none';
+                    redirectOption.style.display = 'block';
+                }
+            }, 3000); // Wait 3 seconds to see if iframe loads
+        });
+    </script>
 </head>
 <body>
     <div class="container">
@@ -193,11 +216,29 @@
                 <div class="app-header">
                     <h3>🍽️ Clove Dish Analyzer</h3>
                 </div>
+                
+                <!-- Embed Option 1: Direct iframe -->
                 <iframe 
                     src="https://davosofscara-clove-dish-analyzer-clove-dish-analyzer-h83bmz.streamlit.app" 
                     class="streamlit-iframe"
-                    title="Clove Dish Analyzer">
+                    title="Clove Dish Analyzer"
+                    style="display: none;" id="streamlit-iframe">
                 </iframe>
+                
+                <!-- Embed Option 2: Redirect button (fallback) -->
+                <div id="redirect-option" style="text-align: center; padding: 60px 20px;">
+                    <h3 style="color: #A9DFBF; margin-bottom: 20px;">🚀 Launch Clove Dish Analyzer</h3>
+                    <p style="margin-bottom: 30px; color: #ccc;">Click below to open the interactive tool in a new tab</p>
+                    <a href="https://davosofscara-clove-dish-analyzer-clove-dish-analyzer-h83bmz.streamlit.app" 
+                       target="_blank" 
+                       class="cta-button" 
+                       style="background: #A9DFBF; color: #111111; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block;">
+                        🍽️ Open Clove Dish Analyzer
+                    </a>
+                    <p style="margin-top: 20px; font-size: 0.9em; color: #888;">
+                        <em>Having trouble? <a href="#book" style="color: #A9DFBF;">Book a demo</a> and we'll walk you through it!</em>
+                    </p>
+                </div>
             </div>
             
             <p style="text-align: center; margin-top: 20px; color: #666;">
