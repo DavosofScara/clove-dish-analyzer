@@ -5,7 +5,6 @@ import seaborn as sns
 from io import BytesIO
 from PIL import Image
 import base64
-from fpdf import FPDF
 from datetime import date
 import tempfile
 import os
