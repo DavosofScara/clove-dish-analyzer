@@ -10,7 +10,42 @@ from datetime import date
 import tempfile
 import os
 
-st.set_page_config(page_title="Clove Dish Analyzer", layout="centered")
+st.set_page_config(page_title="Clove Dish Analyzer", layout="wide")
+
+# Custom CSS for better typography and spacing
+st.markdown("""
+<style>
+    .main-header {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        margin-bottom: 2rem;
+    }
+    .sub-header {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        margin-bottom: 1.5rem;
+        margin-top: 2rem;
+    }
+    .body-text {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        line-height: 1.6;
+        margin-bottom: 1rem;
+    }
+    .section-spacing {
+        margin-top: 3rem;
+        margin-bottom: 2rem;
+    }
+    .card-style {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 1.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Load image and encode as base64
 def get_base64_image(image_path):
@@ -20,23 +55,30 @@ def get_base64_image(image_path):
 # Convert logo
 encoded_logo = get_base64_image("clove_logo.png")
 
-# Inject into page
+# Inject into page with improved styling
 st.markdown(f"""
-<div style='text-align: center; margin-bottom: 1rem;'>
-    <img src="data:image/png;base64,{encoded_logo}" style='width:300px; margin-bottom: 0.5rem;' />
-    <h2 style='margin-bottom: 0;'>Clove Dish Analyzer</h2>
-    <p style='font-style: italic; color: #A9DFBF;'>Forensic Profits in Food & Beverage</p>
+<div style='text-align: center; margin-bottom: 3rem; padding: 2rem 0;'>
+    <img src="data:image/png;base64,{encoded_logo}" style='width:280px; margin-bottom: 1rem; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));' />
+    <h1 class="main-header" style='margin-bottom: 0.5rem; font-size: 2.5rem; color: #F0F0F0;'>Clove Dish Analyzer</h1>
+    <p style='font-style: italic; color: #A9DFBF; font-size: 1.2rem; margin: 0; font-weight: 300;'>Forensic Profits in Food & Beverage</p>
 </div>
 """, unsafe_allow_html=True)
 
 # --- File Uploads ---
-st.markdown("### Upload your files")
+st.markdown('<h2 class="sub-header">📁 Upload Your Files</h2>', unsafe_allow_html=True)
+
+# Create a card-style container for uploads
+st.markdown('<div class="card-style">', unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 with col1:
-    dish_file = st.file_uploader("🧾 Dish Spreadsheet", type=["xlsx"])
+    st.markdown('<p class="body-text">Upload your dish spreadsheet to begin analysis:</p>', unsafe_allow_html=True)
+    dish_file = st.file_uploader("🧾 Dish Spreadsheet", type=["xlsx"], help="Upload an Excel file with your dish data")
 with col2:
-    price_file = st.file_uploader("💰 Ingredient Prices (optional)", type=["xlsx"])
+    st.markdown('<p class="body-text">Optional: Add ingredient price reference:</p>', unsafe_allow_html=True)
+    price_file = st.file_uploader("💰 Ingredient Prices (optional)", type=["xlsx"], help="Upload ingredient price data for cost calculations")
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 
 # Load static carbon footprint reference table
@@ -196,54 +238,97 @@ if dish_file:
     df.loc[df["Estimated CO₂e (kg)"] > 3, "Flag"] += "🌍 High CO₂"
 
     # --- Show Results Table ---
-    st.subheader("📊 Dish Summary with Flags")
-    st.dataframe(df[["Dish Name", "Selling Price (€)", "Total Cost (€)", "Margin (%)", "Estimated CO₂e (kg)", "Flag"]])
+    st.markdown('<h2 class="sub-header">📊 Dish Summary with Flags</h2>', unsafe_allow_html=True)
+    
+    # Create a card-style container for results
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    st.dataframe(df[["Dish Name", "Selling Price (€)", "Total Cost (€)", "Margin (%)", "Estimated CO₂e (kg)", "Flag"]], use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- Charts ---
     sns.set(style="whitegrid")
+    
+    st.markdown('<h2 class="sub-header">📈 Analysis Charts</h2>', unsafe_allow_html=True)
 
     # Margin Chart
-    fig1, ax1 = plt.subplots(figsize=(8, 4))
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
     sns.barplot(data=df.sort_values("Margin (%)", ascending=False), x="Margin (%)", y="Dish Name", ax=ax1, palette="Greens_r")
-    ax1.set_title("Top Dishes by Margin")
+    ax1.set_title("Top Dishes by Margin", fontsize=16, fontweight=600, pad=20)
+    ax1.set_xlabel("Margin (%)", fontsize=12, fontweight=500)
+    ax1.set_ylabel("Dish Name", fontsize=12, fontweight=500)
+    plt.tight_layout()
     st.pyplot(fig1)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Profit Contribution Pie
-    fig2, ax2 = plt.subplots(figsize=(6, 6))
-    ax2.pie(df["Profit (€)"], labels=df["Dish Name"], autopct='%1.1f%%', startangle=140)
-    ax2.set_title("Dish Contribution to Total Profit")
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig2, ax2 = plt.subplots(figsize=(8, 8))
+    ax2.pie(df["Profit (€)"], labels=df["Dish Name"], autopct='%1.1f%%', startangle=140, textprops={'fontsize': 10})
+    ax2.set_title("Dish Contribution to Total Profit", fontsize=16, fontweight=600, pad=20)
+    plt.tight_layout()
     st.pyplot(fig2)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Carbon Impact Chart
-    fig3, ax3 = plt.subplots(figsize=(8, 4))
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig3, ax3 = plt.subplots(figsize=(10, 6))
     sns.barplot(data=df.sort_values("Estimated CO₂e (kg)", ascending=False), x="Estimated CO₂e (kg)", y="Dish Name", ax=ax3, palette="Reds_r")
-    ax3.set_title("CO₂e Footprint per Dish")
+    ax3.set_title("CO₂e Footprint per Dish", fontsize=16, fontweight=600, pad=20)
+    ax3.set_xlabel("CO₂e (kg)", fontsize=12, fontweight=500)
+    ax3.set_ylabel("Dish Name", fontsize=12, fontweight=500)
+    plt.tight_layout()
     st.pyplot(fig3)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- Download Excel ---
+    st.markdown('<h2 class="sub-header">📥 Download Reports</h2>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    
     def to_excel(dataframe):
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             dataframe.to_excel(writer, index=False, sheet_name='Dish Analysis')
         return output.getvalue()
 
-    st.download_button(
-        label="📥 Download Full Excel Report",
-        data=to_excel(df),
-        file_name="Clove_Dish_Analysis.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="📥 Download Full Excel Report",
+            data=to_excel(df),
+            file_name="Clove_Dish_Analysis.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
         )
+    
+    with col2:
+        if st.button("📄 Generate PDF Report", use_container_width=True):
+            pdf_path = generate_pdf(df)
+            with open(pdf_path, "rb") as f:
+                st.download_button(
+                    label="📥 Download PDF",
+                    data=f,
+                    file_name="Clove_Dish_Report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        # --- Booking CTA ---
-    st.markdown("---")
-    st.markdown("#### 💬 Need help interpreting your results?")
-    st.markdown("[📅 Book Now](https://your-calendly-link.com)")
+    # --- Booking CTA ---
+    st.markdown('<div class="card-style" style="background: linear-gradient(135deg, rgba(169, 223, 191, 0.1), rgba(169, 223, 191, 0.05)); border: 1px solid rgba(169, 223, 191, 0.3);">', unsafe_allow_html=True)
+    st.markdown('<h3 style="color: #A9DFBF; margin-bottom: 1rem;">💬 Need help interpreting your results?</h3>', unsafe_allow_html=True)
+    st.markdown('<p class="body-text">Book a consultation to dive deeper into your analysis and optimize your menu profitability.</p>', unsafe_allow_html=True)
+    st.markdown('<a href="https://your-calendly-link.com" target="_blank" style="background: #A9DFBF; color: #111111; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-top: 1rem;">📅 Book Consultation</a>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- New Visuals Section ---
-    st.subheader("📍 Advanced Visuals")
+    st.markdown('<h2 class="sub-header">📍 Advanced Visuals</h2>', unsafe_allow_html=True)
 
     # 1. Cost vs CO₂e Scatterplot
-    fig, ax = plt.subplots(figsize=(8, 6))
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig, ax = plt.subplots(figsize=(10, 7))
 
     sns.scatterplot(
         data=df,
@@ -266,33 +351,38 @@ if dish_file:
     # Annotate top-right quadrant (high cost + high CO₂)
     ax.text(avg_cost + 0.2, avg_co2 + 0.2, "⚠️ High Impact", fontsize=10, color='red')
 
-    ax.set_title("Cost vs CO₂e per Dish")
+    ax.set_title("Cost vs CO₂e per Dish", fontsize=16, fontweight=600, pad=20)
+    ax.set_xlabel("Total Cost (€)", fontsize=12, fontweight=500)
+    ax.set_ylabel("Estimated CO₂e (kg)", fontsize=12, fontweight=500)
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     plt.tight_layout()
     st.pyplot(fig)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # 2. Profit per Dish (€)
-    fig5, ax5 = plt.subplots(figsize=(6, 4))
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig5, ax5 = plt.subplots(figsize=(8, 5))
     sns.barplot(data=df.sort_values("Profit (€)", ascending=True), x="Profit (€)", y="Dish Name", palette="Blues_d", ax=ax5)
-    ax5.set_title("Profit per Dish (€)")
+    ax5.set_title("Profit per Dish (€)", fontsize=16, fontweight=600, pad=20)
+    ax5.set_xlabel("Profit (€)", fontsize=12, fontweight=500)
+    ax5.set_ylabel("Dish Name", fontsize=12, fontweight=500)
+    plt.tight_layout()
     st.pyplot(fig5)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # 3. CO₂e per € Profit
-    fig6, ax6 = plt.subplots(figsize=(6, 4))
+    st.markdown('<div class="card-style">', unsafe_allow_html=True)
+    fig6, ax6 = plt.subplots(figsize=(8, 5))
     sns.barplot(data=df.sort_values("CO₂e per € profit", ascending=False), x="CO₂e per € profit", y="Dish Name", palette="Oranges_r", ax=ax6)
-    ax6.set_title("CO₂e per € Profit")
+    ax6.set_title("CO₂e per € Profit", fontsize=16, fontweight=600, pad=20)
+    ax6.set_xlabel("CO₂e per € Profit", fontsize=12, fontweight=500)
+    ax6.set_ylabel("Dish Name", fontsize=12, fontweight=500)
+    plt.tight_layout()
     st.pyplot(fig6)
+    st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.warning("Upload an Excel file to begin. You can use the template if needed.")
-    st.markdown("[📄 Download Template](sandbox:/mnt/data/Clove_Dish_Template_Extended.xlsx?_chatgptios_conversationID=682ad60d-83dc-800b-9a64-515c8c69a22f&_chatgptios_messageID=99051858-60a6-49a5-b966-7f56ab8045d9)")
-
-if st.button("📄 Generate PDF Report"):
-    pdf_path = generate_pdf(df)
-    with open(pdf_path, "rb") as f:
-        st.download_button(
-            label="📥 Download PDF",
-            data=f,
-            file_name="Clove_Dish_Report.pdf",
-            mime="application/pdf"
-        )
+    st.markdown('<div class="card-style" style="background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3);">', unsafe_allow_html=True)
+    st.warning("📁 Upload an Excel file to begin your analysis. You can use the template below if needed.")
+    st.markdown('<a href="Clove_Dish_Template_Extended.xlsx" download style="background: #A9DFBF; color: #111111; padding: 0.75rem 1.5rem; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block; margin-top: 1rem;">📄 Download Template</a>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
