@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clove Lite — Free Dish Profitability Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f8f9fa;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #30c153 0%, #28a745 100%);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .hero-section h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .hero-section p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 16px 32px;
+            background: white;
+            color: #30c153;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        .content-section {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        .content-section h2 {
+            color: #30c153;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 30px 0;
+        }
+        
+        .benefits-list li {
+            padding: 12px 0;
+            padding-left: 30px;
+            position: relative;
+            font-size: 1.1rem;
+        }
+        
+        .benefits-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #30c153;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        
+        .app-container {
+            background: #1e1e1e;
+            border-radius: 16px;
+            overflow: hidden;
+            margin: 30px 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        
+        .app-header {
+            background: linear-gradient(135deg, #30c153 0%, #28a745 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .app-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+        
+        .streamlit-iframe {
+            width: 100%;
+            height: 800px;
+            border: none;
+            background: #1e1e1e;
+        }
+        
+        .download-section {
+            background: #f8f9fa;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .download-button {
+            display: inline-block;
+            padding: 14px 24px;
+            background: #30c153;
+            color: white;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .download-button:hover {
+            background: #28a745;
+            transform: translateY(-1px);
+        }
+        
+        .calendly-section {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-top: 40px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        
+        .calendly-section h2 {
+            text-align: center;
+            color: #30c153;
+            margin-bottom: 30px;
+        }
+        
+        .calendly-iframe {
+            width: 100%;
+            height: 720px;
+            border: none;
+            border-radius: 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .hero-section h1 {
+                font-size: 2rem;
+            }
+            
+            .content-section {
+                padding: 24px;
+            }
+            
+            .streamlit-iframe {
+                height: 600px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <h1>Clove Lite — Free Dish Profitability Tool</h1>
+            <p>We help restaurants and caterers increase profits and cut waste using data. Clove Lite is a free interactive tool to spot hidden losses and protect margins.</p>
+            <a href="#try-tool" class="cta-button">Try Clove Lite Now</a>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content-section">
+            <h2>What Clove Lite Does</h2>
+            <p>Clove Lite is a powerful yet simple tool that helps you analyze your menu profitability in real-time. Upload your dish data and instantly see:</p>
+            
+            <ul class="benefits-list">
+                <li>Find dishes that look profitable but aren't</li>
+                <li>See true margin after supplier price creep</li>
+                <li>Get a clean weekly view for decisions</li>
+                <li>Calculate carbon footprint per dish</li>
+                <li>Export detailed reports in Excel or PDF</li>
+            </ul>
+        </div>
+
+        <!-- Interactive Tool Section -->
+        <div class="content-section" id="try-tool">
+            <h2>Try Clove Lite Now</h2>
+            <p>Use the interactive tool below to analyze your dishes. Simply upload your Excel spreadsheet and get instant insights into your menu profitability.</p>
+            
+            <div class="app-container">
+                <div class="app-header">
+                    <h3>🍽️ Clove Dish Analyzer</h3>
+                </div>
+                <iframe 
+                    src="https://clove-dish-analyzer.streamlit.app" 
+                    class="streamlit-iframe"
+                    title="Clove Dish Analyzer">
+                </iframe>
+            </div>
+            
+            <p style="text-align: center; margin-top: 20px; color: #666;">
+                <em>Having trouble with the tool? <a href="#book">Book a demo</a> and we'll walk you through it!</em>
+            </p>
+        </div>
+
+        <!-- Download Section -->
+        <div class="download-section">
+            <h2>Prefer to Download?</h2>
+            <p>If you'd rather work offline, you can still download the Excel template and work with it locally.</p>
+            
+            <a href="/downloads/clove-lite-v1.zip" class="download-button">
+                📥 Download Clove Lite (Free)
+            </a>
+            
+            <a href="/downloads/Clove_Snapshot_Branded.pdf" target="_blank" class="download-button">
+                📄 View Sample Report
+            </a>
+        </div>
+
+        <!-- What It Looks Like -->
+        <div class="content-section">
+            <h2>What It Looks Like</h2>
+            <p>See a sample of what Clove Lite can do for your business. <a href="/downloads/Clove_Snapshot_Branded.pdf" target="_blank">View a one‑page snapshot (PDF)</a></p>
+        </div>
+
+        <!-- Calendly Booking Section -->
+        <div class="calendly-section" id="book">
+            <h2>Book a 20‑minute demo</h2>
+            <p style="text-align: center; margin-bottom: 30px;">Let us show you how Clove Lite can transform your menu profitability. Book a free consultation today.</p>
+            
+            <iframe 
+                src="https://calendly.com/davevondavrosh/30min" 
+                class="calendly-iframe"
+                title="Book a consultation with Clove">
+            </iframe>
+        </div>
+    </div>
+</body>
+</html> 
