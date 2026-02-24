@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+
+# Local data / reports
+data/
+*.csv
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.pdf
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
+
