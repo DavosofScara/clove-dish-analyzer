@@ -985,58 +985,26 @@ def build_email_html(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <!-- Nouveaux clients -->
-                  <td style="width:25%;padding:6px 4px 6px 0;">
+                  <td style="width:33%;padding:6px 4px 6px 0;">
                     <div style="background:linear-gradient(145deg,#222831,#1a1d26);border-radius:10px;padding:12px 10px;border:1px solid #2d3139;">
                       <div style="font-size:10px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Nouveaux clients</div>
                       <div style="font-size:16px;color:#f5f5f5;font-weight:600;">{nv_clients}</div>
                     </div>
                   </td>
                   <!-- Devis proposés -->
-                  <td style="width:25%;padding:6px 4px;">
+                  <td style="width:33%;padding:6px 4px;">
                     <div style="background:linear-gradient(145deg,#222831,#1a1d26);border-radius:10px;padding:12px 10px;border:1px solid #2d3139;">
                       <div style="font-size:10px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Devis proposés</div>
                       <div style="font-size:16px;color:#f5f5f5;font-weight:600;">{dv_proposed}</div>
                     </div>
                   </td>
-                  <!-- Valeur confirmée (nouvelle) -->
-                  <td style="width:25%;padding:6px 4px;">
-                    <div style="background:linear-gradient(145deg,#222831,#1a1d26);border-radius:10px;padding:12px 10px;border:1px solid #2d3139;">
-                      <div style="font-size:10px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Valeur confirmée (nouvelle)</div>
-                      <div style="font-size:16px;color:#f5f5f5;font-weight:600;">{val_conf}</div>
-                    </div>
-                  </td>
                   <!-- Meilleur CDP -->
-                  <td style="width:25%;padding:6px 0 6px 4px;">
+                  <td style="width:33%;padding:6px 0 6px 4px;">
                     <div style="background:linear-gradient(145deg,#222831,#1a1d26);border-radius:10px;padding:12px 10px;border:1px solid #2d3139;">
                       <div style="font-size:10px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">Meilleur CDP</div>
                       <div style="font-size:16px;color:#f5f5f5;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{top_cdp_name}</div>
                       <div style="font-size:16px;color:#f5f5f5;font-weight:500;">{top_cdp_val}</div>
                     </div>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Section 2: Week-over-week deltas -->
-          <tr>
-            <td style="padding-top:4px;padding-bottom:20px;">
-              <div style="color:#9ea3b5;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">
-                2 • Changements vs semaine précédente
-              </div>
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-radius:10px;background-color:#222831;border:1px solid #2d3139;">
-                <tr>
-                  <td style="padding:10px 14px;border-right:1px solid #2d3139;">
-                    <div style="font-size:11px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Nouveaux clients</div>
-                    <div style="font-size:16px;color:#f5f5f5;font-weight:500;">{d_new_clients_str}</div>
-                  </td>
-                  <td style="padding:10px 14px;border-right:1px solid #2d3139;">
-                    <div style="font-size:11px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Devis proposés</div>
-                    <div style="font-size:16px;color:#f5f5f5;font-weight:500;">{d_prop_str}</div>
-                  </td>
-                  <td style="padding:10px 14px;">
-                    <div style="font-size:11px;color:#9ea3b5;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Valeur confirmée</div>
-                    <div style="font-size:16px;color:#f5f5f5;font-weight:500;">{d_conf_str}</div>
                   </td>
                 </tr>
               </table>
@@ -1088,12 +1056,9 @@ def build_email_html(
             <td style="padding-top:16px;border-top:1px solid #2d3139;">
               <div style="color:#b4b9c6;font-size:11px;line-height:1.6;">
                 <strong style="color:#e2e5eb;">Définitions :</strong><br/>
-                Nouveaux clients : nombre de clients distincts ayant une demande (Date_Demande) dans la semaine analysée.<br/>
-                Devis proposés : somme des montants PDV_DEVIS pour les devis dont la Date_Demande est dans la semaine.<br/>
-                Valeur confirmée : somme des PDV_DEVIS_CONFIRME pour les devis confirmés dont la Date_Demande est dans la semaine.<br/>
-                Meilleur CDP : chargé de clientèle avec le plus haut montant proposé (somme PDV_DEVIS) sur la semaine analysée.<br/>
-                Opérations cette semaine : nombre de clients distincts ayant une date d'opération entre ce lundi et dimanche.<br/>
-                Confirmé 4 trimestres : somme des PDV_DEVIS_CONFIRME pour les devis confirmés dont la Date_opération est dans chaque trimestre.
+                Section 1 – Cette semaine : opérations, valeur et nombre de clients basés sur Date_opération entre ce lundi et ce dimanche (PDV_DEVIS).<br/>
+                Section 2 – Résumé de la semaine : Nouveaux clients = clients distincts avec Date_Demande dans la semaine analysée ; Devis proposés = somme PDV_DEVIS pour ces demandes ; Meilleur CDP = chargé avec la plus haute somme PDV_DEVIS proposée sur la semaine.<br/>
+                Section 3 – Confirmé, 4 prochains trimestres : Valeur confirmée = somme PDV_DEVIS_CONFIRME pour les devis confirmés dont Date_opération est dans le trimestre ; Valeur en cours = somme PDV_DEVIS pour les devis \"EN COURS\" dont Date_opération est dans le trimestre ; Marge Provision = somme MARGE_FINAL_EVENTS rapportée à la valeur confirmée du trimestre.
               </div>
             </td>
           </tr>

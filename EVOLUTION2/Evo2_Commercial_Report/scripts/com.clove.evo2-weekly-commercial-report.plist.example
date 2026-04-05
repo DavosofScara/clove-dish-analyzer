@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS launchd: Monday 09:10 local time → send weekly report.
+
+  Prefer cron like your other projects? See scripts/crontab.example instead.
+
+  Setup:
+  1. Copy this file to ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist
+  2. Edit WorkingDirectory and ProgramArguments to match your machine:
+     - WorkingDirectory = absolute path to Evo2_Commercial_Report folder
+     - First element of ProgramArguments = path to Python (use .venv/bin/python if you use a venv)
+  3. chmod +x scripts/send_weekly_report.sh (if using the shell wrapper below)
+  4. launchctl load ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist
+  5. launchctl start com.clove.evo2-weekly-commercial-report   # optional test
+
+  Weekday: 0 and 7 = Sunday, 1 = Monday (Apple launchd).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.clove.evo2-weekly-commercial-report</string>
+
+  <!-- Option A: call the wrapper script (uses .venv if present) -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/ABSOLUTE/PATH/TO/EVOLUTION2/Evo2_Commercial_Report/scripts/send_weekly_report.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/ABSOLUTE/PATH/TO/EVOLUTION2/Evo2_Commercial_Report</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/evo2-weekly-commercial-report.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/evo2-weekly-commercial-report.err.log</string>
+</dict>
+</plist>

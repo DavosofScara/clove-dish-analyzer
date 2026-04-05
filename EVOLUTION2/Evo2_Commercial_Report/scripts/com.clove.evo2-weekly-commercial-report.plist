@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Installed copy: copy to ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist
+  Monday 09:10 local time — Evolution2 weekly commercial email (Resend).
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.clove.evo2-weekly-commercial-report</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/scripts/send_weekly_report.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>10</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/logs/launchd.err.log</string>
+</dict>
+</plist>

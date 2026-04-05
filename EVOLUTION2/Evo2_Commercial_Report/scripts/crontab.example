@@ -1,0 +1,21 @@
+# Weekly commercial report — Monday 09:10 (local server time)
+# Field order: minute hour day-of-month month day-of-week
+# day-of-week: 0 and 7 = Sunday, 1 = Monday (same on macOS and Linux cron)
+#
+# Setup:
+#   1. Replace /ABSOLUTE/PATH/TO/Evo2_Commercial_Report with your real path.
+#   2. chmod +x scripts/send_weekly_report.sh
+#   3. crontab -e
+#   4. Paste ONE of the lines below (uncommented).
+#
+# Optional: get cron email on failure (if mail is configured on the host)
+# MAILTO=you@example.com
+
+# Option A — wrapper script (uses .venv/bin/python when present)
+10 9 * * 1 /ABSOLUTE/PATH/TO/Evo2_Commercial_Report/scripts/send_weekly_report.sh >> /tmp/evo2-weekly-commercial-cron.log 2>&1
+
+# Option B — explicit venv Python (good if you don’t use the script)
+# 10 9 * * 1 cd /ABSOLUTE/PATH/TO/Evo2_Commercial_Report && /ABSOLUTE/PATH/TO/Evo2_Commercial_Report/.venv/bin/python -m src.main --send >> /tmp/evo2-weekly-commercial-cron.log 2>&1
+
+# Option C — system python3 (no venv)
+# 10 9 * * 1 cd /ABSOLUTE/PATH/TO/Evo2_Commercial_Report && /usr/bin/python3 -m src.main --send >> /tmp/evo2-weekly-commercial-cron.log 2>&1
