@@ -14,12 +14,14 @@ from .charts import (
     render_cdp_scatter,
     render_site_pdv_season_bars,
 )
+from .cumulative_season_yoy import render_cumulative_season_yoy_data_uri
 from .config import (
     OUTPUTS_DIR,
     LOG_DIR,
     RESEND_API_KEY,
     EMAIL_FROM,
     RECIPIENT_EMAILS,
+    CC_EMAILS,
     DROPBOX_REPORT_URL,
     CLOVE_LOGO_CANDIDATES,
     EVO2_LOGO_CANDIDATES,
@@ -92,7 +94,7 @@ def main() -> None:
         "--as-of",
         type=str,
         default=None,
-        help="Reference date YYYY-MM-DD (default: today). Week KPIs use the prior completed Mon–Sun.",
+        help="Reference date YYYY-MM-DD (default: today). Week KPIs = Mon–Sun ending on the last Sunday ≤ this date.",
     )
     args = parser.parse_args()
 
@@ -115,6 +117,7 @@ def main() -> None:
     logging.info("Validation KPI: %s", kpis.validation)
 
     chart_scatter_uri = render_cdp_scatter(cdp_df)
+    chart_cumulative_yoy_uri = render_cumulative_season_yoy_data_uri(df, as_of)
 
     df_site = add_site_label_column(df)
     site_totals = compute_site_confirmed_pdv_by_season(
@@ -158,6 +161,7 @@ def main() -> None:
         kpi=kpis,
         cdp_section_rows=cdp_rows,
         chart_scatter_uri=chart_scatter_uri,
+        chart_cumulative_yoy_uri=chart_cumulative_yoy_uri,
         chart_site_bars_uri=chart_site_uri,
         site_chart_period_label=site_period_label,
         chart_site_bars_next_uri=chart_site_next_uri,
@@ -179,7 +183,14 @@ def main() -> None:
                 "Missing configuration: set RESEND_API_KEY, EMAIL_FROM, and at least one address in "
                 "RECIPIENT_EMAIL or RECIPIENT_EMAILS in .env"
             )
-        send_email(subject, html, RESEND_API_KEY, EMAIL_FROM, RECIPIENT_EMAILS)
+        send_email(
+            subject,
+            html,
+            RESEND_API_KEY,
+            EMAIL_FROM,
+            RECIPIENT_EMAILS,
+            cc=CC_EMAILS or None,
+        )
     else:
         logging.info("Preview mode: no email sent. Use --send to deliver via Resend.")
 

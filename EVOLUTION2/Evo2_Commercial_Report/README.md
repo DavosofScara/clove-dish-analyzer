@@ -14,13 +14,13 @@ Keep new user-facing strings in the email template and related output in **Frenc
 
 ### Goal
 
-- **Active pipeline (email, French copy):** (1) Dossier counts and (2) Revenue tables include **Période actuelle**, **N-1 (YoY)**, and **Écart** columns (YoY/Écart show `-` until history is wired). **Dossiers confirmés (semaine)** still show `-`; **Dossiers confirmés (saison)** show a count (confirmed + `Date_opération` in full calendar season, proxy until a true confirmation date exists). (3) **Conversion par CDP** — table + scatter, **full extract** (all periods / dates, not week- or season-filtered). (4) **PDV confirmé par site** — current (blue) + next season (orange) bar charts by **`SITE`**. Footer **Définitions** documents metrics.
+- **Active pipeline (email, French copy):** (1) Dossier counts and (2) Revenue tables include **Période actuelle**, **N-1 (YoY)**, and **Écart** columns (YoY/Écart show `-` until history is wired); **below the CA table**, a **cumulative realised CA chart** (current vs prior same-type season, aligned calendar — see **Définitions**). **Dossiers confirmés (semaine)** still show `-`; **Dossiers confirmés (saison)** show a count (confirmed + `Date_opération` in full calendar season, proxy until a true confirmation date exists). (3) **Conversion par CDP** — table + scatter, **full extract** (all periods / dates, not week- or season-filtered). (4) **PDV confirmé par site** — current (blue) + next season (orange) bar charts by **`SITE`**. Footer **Définitions** documents metrics.
 - **Archived (not in the email):** former sections (client type, agents, concentration) — see `archive/` below.
 
 ### Dependencies
 
 ```bash
-python -m pip install pandas openpyxl requests python-dotenv matplotlib
+python -m pip install pandas openpyxl requests python-dotenv matplotlib scipy
 ```
 
 ### Configuration
@@ -30,6 +30,7 @@ Reuses `EVOLUTION2/.env` at the repo root:
 - `RESEND_API_KEY`
 - `EMAIL_FROM`
 - `RECIPIENT_EMAIL` or `RECIPIENT_EMAILS`: one or more addresses, **comma- or semicolon-separated** (e.g. `a@x.com,b@y.com`).
+- `CC_EMAIL` or `CC_EMAILS` (optional): same format; passed to Resend as `cc`.
 - `DROPBOX_REPORT_URL`
 
 ### Logos (email header)
@@ -68,11 +69,23 @@ Send via Resend:
 python -m src.main --send
 ```
 
+### Standalone — cumulative season chart (also embedded in the weekly email)
+
+The same figure is rendered **inline in section 2** of the weekly HTML email (below the CA table). You can still regenerate a PNG locally with:
+
+```bash
+python -m src.cumulative_season_yoy --as-of 2026-04-06
+python -m src.cumulative_season_yoy --as-of 2026-04-06 --html
+# or: ./scripts/run_cumulative_season_yoy.sh
+```
+
+Outputs (gitignored by default): `outputs/cumulative_season_yoy.png`, optional `outputs/cumulative_season_yoy_preview.html`.
+
 **Forwarding / Gmail / Outlook:** The **inline** HTML body is often **re-sanitized** on forward or inside a **reply** (layout, colours, embedded images). That is normal and **not fixable** in the sender HTML alone. Mitigations in this project: (**1**) same report attached as **`rapport_evolution2_hebdomadaire.html`** — recipients can **download and open in a browser** for full fidelity; (**2**) the **Dropbox** button for your canonical workbook; (**3**) a short note in the email footer explains the attachment. `send_email(..., attach_html_copy=False)` disables the attachment if needed.
 
 ### Schedule — Monday 09:10 (local time)
 
-The report is designed to run **after the previous week closes** (logic already uses the last full Mon–Sun when run on a Monday).
+The report uses the **Mon–Sun week ending on the last Sunday on or before** `--as-of` / today (Monday morning = yesterday’s Sunday; **Sunday same day** = that week, not the prior one).
 
 **Cron (recommended — same idea as other email automations)**  
 
@@ -126,8 +139,8 @@ See also `scripts/com.clove.evo2-weekly-commercial-report.plist.example` for a t
 - `PDV_DEVIS` may be blank (treated as 0).
 - Charts are embedded as base64 (no local file paths in the email).
 - **Dossiers réalisés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in **report-to-date** (`season_window_for_metrics`: season start → `min(as_of, season end)`). **Dossiers confirmés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in the **full calendar current season** (e.g. HIVER 15/11–30/04) — proxy until a dedicated confirmation date exists. **Week row:** réalisés and confirmés share the same week window (confirmés card still `-` in the UI). **Realised revenue (week)** sums `PDV_DEVIS_CONFIRME` on confirmed rows in the reference week; **realised revenue (season row)** uses the **full calendar current season**, same as proposed dossiers (season). **CONFIRME** (no accent) = **CONFIRMÉ**.
-- **Propositions envoyées** (email label; was “Dossiers proposés”) — **week row:** distinct `CLIENT_ID` with at least one **`Date_Demande`** in the **reference week** (Mon–Sun, previous completed week), **any** `CONFIRME` / any `Date_opération`. **Season row:** distinct `CLIENT_ID` with at least one **`Date_opération`** in **`current_season.start` … `current_season.end`** (full calendar season). **Chiffre d’affaires** lines in the email are labelled **HT** (amounts are ex-VAT). The email **Définitions** block spells out dates for the run.
-- **Provisional CA** (`compute_ca_provisionnel`) — **potential season revenue** (updates with `--as-of` / report date): **(1)** Sum `PDV_DEVIS_CONFIRME` on **CONFIRMÉ** rows with `Date_opération` in the **full** calendar season (e.g. HIVER **15/11→30/04 inclusive**). **(2)** Add **pipeline**: **EN COURS** rows (non annulés) with `Date_opération` from the **day after** `min(week_end, season end)` **through** `season end` (e.g. 30/04 for HIVER — not into May). **`week_end`** = Sunday end of the previous completed week (same weekly window as the report). Per `CLIENT_ID` in that slice: **sum** `PDV_DEVIS` ÷ **distinct** `DEVIS_ID`, then sum across clients and add to (1). Same structure for the **next** season row.
+- **Propositions envoyées** (email label; was “Dossiers proposés”) — **week row:** distinct `CLIENT_ID` with at least one **`Date_Demande`** in the **reference week** (Mon–Sun ending last Sunday ≤ report date), **any** `CONFIRME` / any `Date_opération`. **Season row:** distinct `CLIENT_ID` with at least one **`Date_opération`** in **`current_season.start` … `current_season.end`** (full calendar season). **Chiffre d’affaires** lines in the email are labelled **HT** (amounts are ex-VAT). The email **Définitions** block spells out dates for the run.
+- **Provisional CA** (`compute_ca_provisionnel`) — **potential season revenue** (updates with `--as-of` / report date): **(1)** Sum `PDV_DEVIS_CONFIRME` on **CONFIRMÉ** rows with `Date_opération` in the **full** calendar season (e.g. HIVER **15/11→30/04 inclusive**). **(2)** Add **pipeline**: **EN COURS** rows (non annulés) with `Date_opération` from the **day after** `min(week_end, season end)` **through** `season end` (e.g. 30/04 for HIVER — not into May). **`week_end`** = Sunday end of that same reference week. Per `CLIENT_ID` in that slice: **sum** `PDV_DEVIS` ÷ **distinct** `DEVIS_ID`, then sum across clients and add to (1). Same structure for the **next** season row.
 
 ### Archived modules (optional reactivation)
 

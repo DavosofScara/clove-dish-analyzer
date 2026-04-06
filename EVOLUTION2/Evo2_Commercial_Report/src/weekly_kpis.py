@@ -4,7 +4,7 @@ Weekly and seasonal KPIs + provisional revenue (current and next season).
 Definitions (locked):
 - Confirmed: CONFIRMÉ or CONFIRME (after normalise) on column CONFIRME.
 - Propositions envoyées (email label) — **week**: distinct CLIENT_ID with ≥1 row whose **Date_Demande** falls in the
-  reference week (Mon–Sun, previous completed week), regardless of CONFIRME / Date_opération.
+  reference week (Mon–Sun ending last Sunday ≤ report date), regardless of CONFIRME / Date_opération.
   **Season** row: Date_opération in the full current season.
 - Realised revenue (season row in email): sum PDV_DEVIS_CONFIRME on confirmed rows with Date_opération
   in the full calendar current season (same bounds as proposed dossiers season).
@@ -16,7 +16,7 @@ Definitions (locked):
   Date_opération in the full calendar season [start, end]. (2) Add pipeline: EN COURS rows with
   Date_opération from the day after min(week_end, season end) through season end; per CLIENT_ID,
   contribution = sum(PDV_DEVIS) / count(distinct DEVIS_ID). Here week_end is the Sunday end of the
-  completed week before ``as_of`` (report run date), so the window updates as the season progresses.
+  Mon–Sun week ending on the last Sunday ≤ ``as_of``, so the window updates as the season progresses.
 - One dossier = one CLIENT_ID (distinct counts).
 
 Week row: réalisés = confirmés (same window). Saison row: confirmés = full season; réalisés = report-to-date.

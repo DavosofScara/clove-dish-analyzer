@@ -47,6 +47,9 @@ RECIPIENT_EMAILS = parse_recipient_list(
     os.getenv("RECIPIENT_EMAILS", "") or os.getenv("RECIPIENT_EMAIL", "")
 )
 
+# Optional CC (comma/semicolon-separated); CC_EMAILS or CC_EMAIL
+CC_EMAILS = parse_recipient_list(os.getenv("CC_EMAILS", "") or os.getenv("CC_EMAIL", ""))
+
 
 # ---------------------------------------------------------------------------
 # Data source (same as weekly report)

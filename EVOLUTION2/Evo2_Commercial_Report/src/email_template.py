@@ -223,6 +223,7 @@ def build_weekly_email_html(
     kpi: WeeklyKpiResult,
     cdp_section_rows: List[List[Tuple[str, Optional[float]]]],
     chart_scatter_uri: str,
+    chart_cumulative_yoy_uri: str,
     chart_site_bars_uri: str,
     site_chart_period_label: str,
     chart_site_bars_next_uri: str,
@@ -255,12 +256,13 @@ def build_weekly_email_html(
 
     sm_start = kpi.current_season.start.strftime("%d/%m/%Y")
     sm_end = kpi.season_metrics_end.strftime("%d/%m/%Y")
+    report_date_label = kpi.season_metrics_end.strftime("%d/%m/%Y")
 
     definitions_html = f"""
                 <div style="font-size:11px;line-height:1.65;color:#e2e5eb;">
                   <strong>Source.</strong> Feuille <code>extract_devis</code> (Evolution2_Report_V13.xlsm) ; enrichissement <code>TYPE_DE_CLIENT</code> via la base Clients (MARKETING_MAIL), jointure NOM_CLIENT + NOM_AGENT.<br/><br/>
 
-                  <strong>Semaine de référence.</strong> Lundi–dimanche ; si envoi un lundi, les KPI « semaine » = la semaine civile <em>précédente</em> (jusqu’au dimanche).<br/><br/>
+                  <strong>Semaine de référence.</strong> Lundi–dimanche, celle qui se termine au <strong>dernier dimanche ≤ date du rapport</strong> (un lundi matin = dimanche d’hier ; un dimanche = ce même dimanche, pas la semaine d’avant).<br/><br/>
 
                   <strong>Saisons (calendrier).</strong> HIVER : 15/11–30/04. ÉTÉ : 01/05–14/11.<br/><br/>
 
@@ -275,6 +277,8 @@ def build_weekly_email_html(
                   <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. <em>CA réalisé</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence (semaine) ou dans la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}) pour la ligne saison.
                   <em>CA provisionnel</em> : <strong>(1)</strong> même base confirmée que le CA réalisé saison (saison calendaire entière, ligne en cours ou suivante).
                   <strong>(2)</strong> + complément : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients. Saison suivante : mêmes règles sur ({next_season_start} – {next_season_end}).<br/><br/>
+
+                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA réalisé (saison) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract).<br/><br/>
 
                   <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, PDV confirmé agrégé, PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).<br/><br/>
 
@@ -333,6 +337,12 @@ def build_weekly_email_html(
               <table width="100%" cellspacing="0" cellpadding="0" style="border-radius:10px;background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-collapse:collapse;">
                   {ca_table}
               </table>
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-top:14px;margin-bottom:6px;">
+                CA réalisé cumulé — saison en cours vs N-1 (même type)
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_cumulative_yoy_uri}" alt="CA cumulé confirmé — comparaison saison" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
             </td>
           </tr>
 

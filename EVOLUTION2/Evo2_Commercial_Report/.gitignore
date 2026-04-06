@@ -1,2 +1,6 @@
 # Generated preview (run `python -m src.main` to regenerate)
 outputs/*.html
+
+# Standalone cumulative season YoY chart
+outputs/cumulative_season_yoy.png
+outputs/cumulative_season_yoy_preview.html

@@ -16,6 +16,7 @@ def send_email(
     email_from: str,
     recipients: List[str],
     *,
+    cc: List[str] | None = None,
     attach_html_copy: bool = True,
     html_attachment_filename: str = "rapport_evolution2_hebdomadaire.html",
 ) -> None:
@@ -29,6 +30,9 @@ def send_email(
         "subject": subject,
         "html": html,
     }
+    cc_list = [a.strip() for a in (cc or []) if a and str(a).strip()]
+    if cc_list:
+        payload["cc"] = cc_list
     if attach_html_copy:
         # Forwards/replies often re-sanitize inline HTML; the attachment survives and opens at full fidelity in a browser.
         payload["attachments"] = [
@@ -48,4 +52,7 @@ def send_email(
         logger.error("Resend error (%s): %s", resp.status_code, resp.text)
         raise RuntimeError(f"Resend error: {resp.text}")
 
-    logger.info("Email sent to %s", ", ".join(recipients))
+    dest = ", ".join(recipients)
+    if cc_list:
+        dest += f" (cc: {', '.join(cc_list)})"
+    logger.info("Email sent to %s", dest)

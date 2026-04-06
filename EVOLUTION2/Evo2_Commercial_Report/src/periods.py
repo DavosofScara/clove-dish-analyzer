@@ -23,16 +23,21 @@ class SeasonPeriod:
 
 def previous_completed_week(as_of: date) -> Tuple[date, date]:
     """
-    Monday–Sunday week *before* the calendar week containing `as_of`.
+    Monday–Sunday week ending on the **most recent Sunday on or before** ``as_of``.
 
-    When the email is sent on Monday, pass that Monday: the window is the
-    Mon–Sun that ended yesterday (last Sunday).
+    - **Monday** ``as_of``: that Sunday is yesterday → same as “semaine précédente”.
+    - **Sunday** ``as_of``: that Sunday is today → KPIs are for **this** Mon–Sun block
+      (e.g. 30/03–05/04), not the week before — avoids being one week early when the
+      job runs on a Sunday or ``--as-of`` is a Sunday.
+
+    Uses ``(weekday + 1) % 7`` so Sunday (weekday 6) subtracts 0 days, not 7.
     """
     d = as_of.date() if hasattr(as_of, "date") and callable(getattr(as_of, "date")) else as_of
 
-    last_sunday = d - timedelta(days=d.weekday() + 1)
-    last_monday = last_sunday - timedelta(days=6)
-    return last_monday, last_sunday
+    days_back = (d.weekday() + 1) % 7
+    week_end_sunday = d - timedelta(days=days_back)
+    week_start_monday = week_end_sunday - timedelta(days=6)
+    return week_start_monday, week_end_sunday
 
 
 def season_containing(d: date) -> SeasonPeriod:
@@ -75,6 +80,24 @@ def next_season_after(current: SeasonPeriod) -> SeasonPeriod:
     start = date(y, 11, 15)
     end = date(y + 1, 4, 30)
     return SeasonPeriod(start, end, f"HIVER {yy(y)}/{yy(y + 1)}")
+
+
+def previous_season_before(current: SeasonPeriod) -> SeasonPeriod:
+    """
+    Previous season of the **same type** (YoY): winter vs winter, summer vs summer.
+
+    HIVER 25/26 → HIVER 24/25; ÉTÉ 26 → ÉTÉ 25.
+    """
+    yy = lambda y: str(y)[-2:]
+    if current.label.startswith("HIVER"):
+        y0 = current.start.year
+        start = date(y0 - 1, 11, 15)
+        end = date(y0, 4, 30)
+        return SeasonPeriod(start, end, f"HIVER {yy(y0 - 1)}/{yy(y0)}")
+    y0 = current.start.year
+    start = date(y0 - 1, 5, 1)
+    end = date(y0 - 1, 11, 14)
+    return SeasonPeriod(start, end, f"ÉTÉ {yy(y0 - 1)}")
 
 
 def season_window_for_metrics(season: SeasonPeriod, as_of: date) -> Tuple[date, date]:

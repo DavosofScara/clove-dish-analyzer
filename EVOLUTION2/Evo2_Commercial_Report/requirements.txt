@@ -3,3 +3,4 @@ openpyxl
 requests
 python-dotenv
 matplotlib
+scipy
