@@ -222,6 +222,7 @@ def build_weekly_email_html(
     kpi: WeeklyKpiResult,
     cdp_section_rows: List[List[Tuple[str, Optional[float]]]],
     chart_scatter_uri: str,
+    chart_margin_uri: str,
     chart_cumulative_yoy_uri: str,
     chart_site_bars_uri: str,
     site_chart_period_label: str,
@@ -279,7 +280,8 @@ def build_weekly_email_html(
 
                   <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA confirmé (saison en cours) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract).<br/><br/>
 
-                  <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, PDV confirmé agrégé, PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).<br/><br/>
+                  <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, PDV confirmé agrégé, PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).
+                  <strong>Graphique marge budget vs réelle</strong> : feuille <code>Marge_Reelle_Devis</code> (lignes <code>ALL_LINES_VALIDE = True</code>) ; par CDP, <strong>moyenne simple</strong> de <code>100 × marge € ÷ PDV_DEVIS_CONFIRME</code> — budget = <code>MARGE_EVENTS_FINAL_BUDGET</code>, réelle = <code>MARGE_EVENTS_REEL</code> (marge avant commission partenaire site EVO2).<br/><br/>
 
                   <strong>4. PDV par site.</strong> <em>Saison en cours</em> : confirmés, <code>Date_opération</code> du début de saison à la <strong>date du rapport</strong> (même fenêtre que la légende sous le graphique). <em>Saison suivante</em> : toute la saison suivante ({next_season_start} – {next_season_end}).
                 </div>
@@ -374,6 +376,17 @@ def build_weekly_email_html(
               </div>
               <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
                 <img src="{chart_scatter_uri}" alt="Conversion vs Valeur par CDP" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:6px;padding-bottom:18px;">
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+                Marge budget vs réelle par CDP
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_margin_uri}" alt="Marge budget vs réelle par CDP" style="max-width:100%;height:auto;border-radius:6px;" />
               </div>
             </td>
           </tr>

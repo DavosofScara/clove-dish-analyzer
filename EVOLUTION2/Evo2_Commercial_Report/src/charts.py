@@ -13,7 +13,14 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
-from .config import CLOVE_GREEN, THEME_BORDER, THEME_DARK, THEME_MUTED, THEME_TEXT
+from .config import (
+    CLOVE_GREEN,
+    CLOVE_GREEN_MUTED,
+    THEME_BORDER,
+    THEME_DARK,
+    THEME_MUTED,
+    THEME_TEXT,
+)
 from .load_data import coerce_number, get_ci_column
 from .periods import date_in_range
 from .status_norm import is_confirmed_exact
@@ -295,6 +302,115 @@ def render_cdp_scatter(cdp_df: pd.DataFrame) -> str:
             0.5,
             0.02,
             "Surface de chaque bulle proportionnelle au PDV confirmé total du CDP (somme PDV devis confirmés)",
+            ha="center",
+            fontsize=8,
+            color=THEME_MUTED,
+            transform=fig.transFigure,
+        )
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
+        plt.close(fig)
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
+def _chart_font_context() -> dict:
+    return {
+        "font.family": "sans-serif",
+        "font.sans-serif": [
+            "Helvetica Neue",
+            "Helvetica",
+            "Arial",
+            "Segoe UI",
+            "Roboto",
+            "DejaVu Sans",
+        ],
+    }
+
+
+def _empty_chart_data_uri(*, figsize: tuple[float, float] = (9.0, 5.8)) -> str:
+    fig, ax = plt.subplots(figsize=figsize)
+    fig.patch.set_facecolor(THEME_DARK)
+    ax.set_facecolor(THEME_DARK)
+    ax.text(0.5, 0.5, "Aucune donnée", ha="center", va="center", color=THEME_TEXT, fontsize=12)
+    ax.axis("off")
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
+    plt.close(fig)
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
+def render_cdp_margin_bars(margin_df: pd.DataFrame) -> str:
+    """
+    Grouped bars per CDP: simple average margin % of PDV_DEVIS (budget vs réelle).
+    Same footprint and dark theme as ``render_cdp_scatter``.
+    """
+    fig_w, fig_h = 9.0, 5.8
+    if margin_df.empty:
+        logger.warning("CDP margin dataframe is empty, bar chart will be blank.")
+        return _empty_chart_data_uri(figsize=(fig_w, fig_h))
+
+    labels = margin_df["CDP"].astype(str).tolist()
+    budget = margin_df["Marge_budget_pct_moyenne"].fillna(0.0).to_numpy()
+    reelle = margin_df["Marge_reelle_pct_moyenne"].fillna(0.0).to_numpy()
+    n = len(labels)
+    x = np.arange(n, dtype=float)
+    width = 0.36
+
+    with plt.rc_context(_chart_font_context()):
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        fig.patch.set_facecolor(THEME_DARK)
+        ax.set_facecolor(THEME_DARK)
+        ax.grid(True, axis="y", alpha=0.18, color=THEME_MUTED, linestyle="-")
+
+        ax.bar(
+            x - width / 2,
+            budget,
+            width,
+            label="Marge budget (moy. %)",
+            color=CLOVE_GREEN_MUTED,
+            edgecolor=THEME_BORDER,
+            linewidth=0.6,
+            zorder=2,
+        )
+        ax.bar(
+            x + width / 2,
+            reelle,
+            width,
+            label="Marge réelle (moy. %)",
+            color=CLOVE_GREEN,
+            edgecolor="#a8f578",
+            linewidth=0.6,
+            zorder=3,
+        )
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=35, ha="right", color=THEME_TEXT)
+        ax.set_ylabel("Marge / PDV (%)", color=THEME_TEXT, fontsize=10)
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _p: f"{v:.0f}%"))
+        ax.tick_params(colors=THEME_TEXT)
+        for spine in ax.spines.values():
+            spine.set_color(THEME_BORDER)
+
+        leg = ax.legend(
+            loc="upper right",
+            facecolor=THEME_DARK,
+            edgecolor=THEME_BORDER,
+            labelcolor=THEME_TEXT,
+            fontsize=9,
+        )
+        for text in leg.get_texts():
+            text.set_color(THEME_TEXT)
+
+        fig.subplots_adjust(bottom=0.22)
+        fig.text(
+            0.5,
+            0.02,
+            "Feuille Marge_Reelle_Devis · lignes ALL_LINES_VALIDE = True · "
+            "moyenne simple de (marge € ÷ PDV_DEVIS_CONFIRME) par ligne · "
+            "marge réelle = MARGE_EVENTS_REEL (avant commission site EVO2)",
             ha="center",
             fontsize=8,
             color=THEME_MUTED,

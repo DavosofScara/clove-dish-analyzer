@@ -11,6 +11,7 @@ import pandas as pd
 from .charts import (
     add_site_label_column,
     compute_site_confirmed_pdv_by_season,
+    render_cdp_margin_bars,
     render_cdp_scatter,
     render_site_pdv_season_bars,
 )
@@ -27,8 +28,13 @@ from .config import (
     EVO2_LOGO_CANDIDATES,
 )
 from .email_template import build_weekly_email_html, format_currency, format_percent
-from .load_data import load_excel_data, load_client_database, enrich_with_client_type
-from .metrics import compute_section1_cdp
+from .load_data import (
+    load_excel_data,
+    load_client_database,
+    load_marge_reelle_devis,
+    enrich_with_client_type,
+)
+from .metrics import compute_cdp_margin_pct_averages, compute_section1_cdp
 from .send_email import send_email
 from .weekly_kpis import compute_weekly_kpis
 
@@ -117,6 +123,14 @@ def main() -> None:
     logging.info("Validation KPI: %s", kpis.validation)
 
     chart_scatter_uri = render_cdp_scatter(cdp_df)
+    marge_df = load_marge_reelle_devis()
+    margin_cdp_df = compute_cdp_margin_pct_averages(marge_df)
+    chart_margin_uri = render_cdp_margin_bars(margin_cdp_df)
+    logging.info(
+        "CDP margin chart: %d CDPs shown from %d source rows",
+        len(margin_cdp_df),
+        len(marge_df),
+    )
     chart_cumulative_yoy_uri = render_cumulative_season_yoy_data_uri(df, as_of)
 
     df_site = add_site_label_column(df)
@@ -161,6 +175,7 @@ def main() -> None:
         kpi=kpis,
         cdp_section_rows=cdp_rows,
         chart_scatter_uri=chart_scatter_uri,
+        chart_margin_uri=chart_margin_uri,
         chart_cumulative_yoy_uri=chart_cumulative_yoy_uri,
         chart_site_bars_uri=chart_site_uri,
         site_chart_period_label=site_period_label,

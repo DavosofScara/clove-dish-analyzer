@@ -61,6 +61,7 @@ EXCEL_PATH = Path(
     "Evolution2_Report_V13.xlsm"
 )
 EXCEL_SHEET_NAME = "extract_devis"
+MARGE_REELLE_SHEET_NAME = os.getenv("MARGE_REELLE_SHEET_NAME", "Marge_Reelle_Devis")
 
 # Local path (pandas reads the synced file). Override with CLIENT_DB_PATH in .env.
 _DEFAULT_CLIENT_DB = (
@@ -101,6 +102,7 @@ EVO2_LOGO_CANDIDATES = [
 
 CLOVE_GREEN = "#62d13c"
 CLOVE_GREEN_DARK = "#59a52c"
+CLOVE_GREEN_MUTED = "#3a7d32"  # budget margin bars (less intense than réelle)
 THEME_DARK = "#222831"
 THEME_DARK_ALT = "#1a1d26"
 THEME_BORDER = "#2d3139"

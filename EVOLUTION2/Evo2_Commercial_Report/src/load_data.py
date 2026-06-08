@@ -6,8 +6,13 @@ from typing import Optional
 
 import pandas as pd
 
-from .config import EXCEL_PATH, EXCEL_SHEET_NAME, CLIENT_DB_PATH, CLIENT_DB_SHEET_NAME
-
+from .config import (
+    EXCEL_PATH,
+    EXCEL_SHEET_NAME,
+    MARGE_REELLE_SHEET_NAME,
+    CLIENT_DB_PATH,
+    CLIENT_DB_SHEET_NAME,
+)
 logger = logging.getLogger(__name__)
 
 
@@ -120,6 +125,108 @@ def load_excel_data() -> pd.DataFrame:
         )
 
     return df
+
+
+def _resolve_column(df: pd.DataFrame, *candidates: str) -> Optional[str]:
+    """Return first matching column (case-insensitive) from candidates."""
+    for name in candidates:
+        col = get_ci_column(df, name)
+        if col:
+            return col
+    return None
+
+
+def _is_truthy_flag(value) -> bool:
+    if pd.isna(value):
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value).strip().upper() in {"TRUE", "OUI", "YES", "1", "VRAI"}
+
+
+def load_marge_reelle_devis() -> pd.DataFrame:
+    """
+    Hidden sheet Marge_Reelle_Devis: confirmed devis margins vs PDV.
+    Returns logical column names: CDP, PDV_DEVIS, MARGE_EVENTS_REELLE, MARGE_EVENTS_FINAL_BUDGET.
+    """
+    if not EXCEL_PATH.exists():
+        raise FileNotFoundError(f"Excel file not found: {EXCEL_PATH}")
+
+    logger.info(
+        "Loading margin sheet '%s' from %s", MARGE_REELLE_SHEET_NAME, EXCEL_PATH
+    )
+    try:
+        df = pd.read_excel(
+            EXCEL_PATH,
+            sheet_name=MARGE_REELLE_SHEET_NAME,
+            engine="openpyxl",
+            dtype=object,
+        )
+    except ValueError as exc:
+        if "Worksheet" in str(exc) or "sheet" in str(exc).lower():
+            import openpyxl
+
+            wb = openpyxl.load_workbook(EXCEL_PATH, read_only=True, data_only=True)
+            available = ", ".join(repr(s) for s in wb.sheetnames)
+            wb.close()
+            raise ValueError(
+                f"Worksheet '{MARGE_REELLE_SHEET_NAME}' not found in {EXCEL_PATH}. "
+                f"Available sheets: {available}"
+            ) from exc
+        raise
+
+    column_map = {
+        "CDP": _resolve_column(df, "CDP"),
+        "PDV_DEVIS": _resolve_column(df, "PDV_DEVIS", "PDV_DEVIS_CONFIRME"),
+        "MARGE_EVENTS_REELLE": _resolve_column(
+            df, "MARGE_EVENTS_REELLE", "MARGE_EVENTS_REEL"
+        ),
+        "MARGE_EVENTS_FINAL_BUDGET": _resolve_column(
+            df, "MARGE_EVENTS_FINAL_BUDGET", "MARGE EVENTS FINAL BUDGET"
+        ),
+    }
+    missing = [k for k, v in column_map.items() if not v]
+    if missing:
+        cols = ", ".join(str(c) for c in df.columns)
+        raise ValueError(
+            f"Required column(s) {missing} missing on sheet {MARGE_REELLE_SHEET_NAME}. "
+            f"Found: {cols}"
+        )
+
+    out = df[[column_map[k] for k in column_map]].copy()
+    out.columns = list(column_map.keys())
+
+    out["CDP"] = normalize_str_series(out["CDP"])
+    for col in ("PDV_DEVIS", "MARGE_EVENTS_REELLE", "MARGE_EVENTS_FINAL_BUDGET"):
+        out[col] = out[col].apply(coerce_number)
+
+    valide_col = _resolve_column(df, "ALL_LINES_VALIDE", "ALL LINES VALIDE")
+    before_valide = len(out)
+    if valide_col:
+        mask = df[valide_col].map(_is_truthy_flag)
+        out = out[mask].copy()
+        logger.info(
+            "Marge_Reelle_Devis: kept %d / %d rows with ALL_LINES_VALIDE = True",
+            len(out),
+            before_valide,
+        )
+    else:
+        logger.warning(
+            "ALL_LINES_VALIDE column missing on %s; no line-level validation filter applied",
+            MARGE_REELLE_SHEET_NAME,
+        )
+
+    out = out[out["CDP"].astype(str).str.strip() != ""]
+    out = out[out["PDV_DEVIS"].fillna(0) > 0]
+
+    logger.info(
+        "Marge_Reelle_Devis: %d rows, %d distinct CDPs after filters",
+        len(out),
+        out["CDP"].nunique(),
+    )
+    return out
 
 
 def load_client_database() -> pd.DataFrame:

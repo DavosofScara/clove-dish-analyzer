@@ -65,3 +65,39 @@ def compute_section1_cdp(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, floa
     }
 
     return out.sort_values("PDV_confirme", ascending=False), sanity
+
+
+def compute_cdp_margin_pct_averages(
+    marge_df: pd.DataFrame,
+    *,
+    max_cdp: int = 8,
+) -> pd.DataFrame:
+    """
+    Per CDP: simple mean of row-level margin % = 100 × margin_eur / PDV_DEVIS.
+    Budget = MARGE_EVENTS_FINAL_BUDGET; réelle = MARGE_EVENTS_REELLE (before site commission).
+    """
+    if marge_df.empty:
+        return pd.DataFrame(
+            columns=[
+                "CDP",
+                "Marge_budget_pct_moyenne",
+                "Marge_reelle_pct_moyenne",
+                "N_lignes",
+            ]
+        )
+
+    sub = marge_df.copy()
+    pdv = sub["PDV_DEVIS"].astype(float)
+    sub["_budget_pct"] = 100.0 * sub["MARGE_EVENTS_FINAL_BUDGET"].fillna(0) / pdv
+    sub["_reelle_pct"] = 100.0 * sub["MARGE_EVENTS_REELLE"].fillna(0) / pdv
+
+    agg = (
+        sub.groupby("CDP", as_index=False)
+        .agg(
+            Marge_budget_pct_moyenne=("_budget_pct", "mean"),
+            Marge_reelle_pct_moyenne=("_reelle_pct", "mean"),
+            N_lignes=("CDP", "count"),
+        )
+        .sort_values("Marge_reelle_pct_moyenne", ascending=False)
+    )
+    return agg.head(max_cdp).reset_index(drop=True)
