@@ -140,6 +140,9 @@ def load_client_database() -> pd.DataFrame:
         "TYPE_DE_CLIENT": "TYPE_DE_CLIENT",
         "Date_opération": "DATE_OPERATION",
         "Nb_Devis": "NB_DEVIS",
+        "DATE CONFIRME": "DATE_CONFIRME_CLIENT",
+        "DATE CONFIRMÉ": "DATE_CONFIRME_CLIENT",
+        "DATE_CONFIRME": "DATE_CONFIRME_CLIENT",
     }
     df = df.rename(columns=rename_map)
 
@@ -150,7 +153,23 @@ def load_client_database() -> pd.DataFrame:
     if "DATE_OPERATION" in df.columns:
         df["DATE_OPERATION"] = df["DATE_OPERATION"].apply(parse_excel_date)
 
+    if "DATE_CONFIRME_CLIENT" in df.columns:
+        df["DATE_CONFIRME_CLIENT"] = df["DATE_CONFIRME_CLIENT"].apply(parse_excel_date)
+
     return df
+
+
+def augment_client_key(df: pd.DataFrame) -> pd.DataFrame:
+    """Add ``client_key`` = normalize(NOM_CLIENT)|normalize(NOM_AGENT) (same rule as extract merge)."""
+    if "NOM_CLIENT" not in df.columns or "NOM_AGENT" not in df.columns:
+        raise ValueError("augment_client_key requires NOM_CLIENT and NOM_AGENT.")
+    out = df.copy()
+    out["client_key"] = (
+        out["NOM_CLIENT"].astype(str).map(normalize_key)
+        + "|"
+        + out["NOM_AGENT"].astype(str).map(normalize_key)
+    )
+    return out
 
 
 def enrich_with_client_type(extract_df: pd.DataFrame, client_df: pd.DataFrame) -> pd.DataFrame:
@@ -159,19 +178,8 @@ def enrich_with_client_type(extract_df: pd.DataFrame, client_df: pd.DataFrame) -
     if "NOM_CLIENT" not in client_df.columns or "NOM_AGENT" not in client_df.columns:
         raise ValueError("client database must include NOM_CLIENT and NOM_AGENT.")
 
-    extract_df = extract_df.copy()
-    client_df = client_df.copy()
-
-    extract_df["client_key"] = (
-        extract_df["NOM_CLIENT"].astype(str).map(normalize_key)
-        + "|"
-        + extract_df["NOM_AGENT"].astype(str).map(normalize_key)
-    )
-    client_df["client_key"] = (
-        client_df["NOM_CLIENT"].astype(str).map(normalize_key)
-        + "|"
-        + client_df["NOM_AGENT"].astype(str).map(normalize_key)
-    )
+    extract_df = augment_client_key(extract_df.copy())
+    client_df = augment_client_key(client_df.copy())
 
     def pick_row(group: pd.DataFrame) -> pd.Series:
         if "DATE_OPERATION" in group.columns and group["DATE_OPERATION"].notna().any():
@@ -190,8 +198,20 @@ def enrich_with_client_type(extract_df: pd.DataFrame, client_df: pd.DataFrame) -
     )
     lookup = lookup[["client_key", "TYPE_DE_CLIENT"]].copy()
 
+    # DATE CONFIRME may live on a different row than pick_row (TYPE / DATE_OPERATION) — merge max per key.
+    if "DATE_CONFIRME_CLIENT" in client_df.columns:
+        dc_agg = (
+            client_df.groupby("client_key", as_index=False)["DATE_CONFIRME_CLIENT"]
+            .max()
+        )
+        lookup = lookup.merge(dc_agg, on="client_key", how="left")
+    else:
+        lookup["DATE_CONFIRME_CLIENT"] = pd.NaT
+
     merged = extract_df.merge(lookup, on="client_key", how="left")
     merged["TYPE_DE_CLIENT"] = merged["TYPE_DE_CLIENT"].fillna("INCONNU")
+    if "DATE_CONFIRME_CLIENT" not in merged.columns:
+        merged["DATE_CONFIRME_CLIENT"] = pd.NaT
 
     total = len(merged)
     matched = int((merged["TYPE_DE_CLIENT"] != "INCONNU").sum())

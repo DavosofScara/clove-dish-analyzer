@@ -14,7 +14,7 @@ Keep new user-facing strings in the email template and related output in **Frenc
 
 ### Goal
 
-- **Active pipeline (email, French copy):** (1) Dossier counts and (2) Revenue tables include **Période actuelle**, **N-1 (YoY)**, and **Écart** columns (YoY/Écart show `-` until history is wired); **below the CA table**, a **cumulative realised CA chart** (current vs prior same-type season, aligned calendar — see **Définitions**). **Dossiers confirmés (semaine)** still show `-`; **Dossiers confirmés (saison)** show a count (confirmed + `Date_opération` in full calendar season, proxy until a true confirmation date exists). (3) **Conversion par CDP** — table + scatter, **full extract** (all periods / dates, not week- or season-filtered). (4) **PDV confirmé par site** — current (blue) + next season (orange) bar charts by **`SITE`**. Footer **Définitions** documents metrics.
+- **Active pipeline (email, French copy):** (1) Dossier counts and (2) Revenue tables include **Période actuelle**, **N-1 (YoY)**, and **Écart** columns (YoY/Écart show `-` until history is wired); **below the CA table**, a **cumulative realised CA chart** (current vs prior same-type season, aligned calendar — see **Définitions**). **Dossiers confirmés (semaine)** = distinct `CLIENT_ID` on the extract whose `NOM_CLIENT`+`NOM_AGENT` key matches **any** row on the Clients sheet with **`DATE CONFIRME`** in the **reference week** (not only the single merged row used for `TYPE_DE_CLIENT`); **Dossiers confirmés (saison)** still use confirmed + `Date_opération` in the full calendar season (proxy). (3) **Conversion par CDP** — table + scatter, **full extract** (all periods / dates, not week- or season-filtered). (4) **PDV confirmé par site** — current (blue) + next season (orange) bar charts by **`SITE`**. Footer **Définitions** documents metrics.
 - **Archived (not in the email):** former sections (client type, agents, concentration) — see `archive/` below.
 
 ### Dependencies
@@ -32,6 +32,9 @@ Reuses `EVOLUTION2/.env` at the repo root:
 - `RECIPIENT_EMAIL` or `RECIPIENT_EMAILS`: one or more addresses, **comma- or semicolon-separated** (e.g. `a@x.com,b@y.com`).
 - `CC_EMAIL` or `CC_EMAILS` (optional): same format; passed to Resend as `cc`.
 - `DROPBOX_REPORT_URL`
+- `CLIENT_DB_PATH` (optional): absolute path to **Clients Database.xlsx** on disk (Dropbox-synced folder). Falls back to the path in `config.py` if unset.
+- `DROPBOX_CLIENT_DATABASE_URL` (optional): Dropbox **share link** to the same file (documentation / your records; **pandas does not load from this URL** — use a local `CLIENT_DB_PATH`).
+- `CLIENT_DB_SHEET_NAME` (optional): sheet name (default **`MARKETING_MAIL`**, unchanged from original). Set **`CLIENTS`** when **DATE CONFIRME** is on that sheet.
 
 ### Logos (email header)
 
@@ -46,6 +49,8 @@ Same workbook as the main weekly report:
 ```
 
 Sheet: `extract_devis`
+
+**Clients database** (`Clients Database.xlsx`): default sheet **`MARKETING_MAIL`** (as originally). Set **`CLIENT_DB_SHEET_NAME=CLIENTS`** in `.env` if Power Query writes **DATE CONFIRME** there. Used to enrich **`TYPE_DE_CLIENT`** and **`DATE CONFIRME`** → `DATE_CONFIRME_CLIENT` on the extract before KPIs.
 
 ### Run
 
@@ -138,7 +143,7 @@ See also `scripts/com.clove.evo2-weekly-commercial-report.plist.example` for a t
 - Column names are resolved case-insensitively.
 - `PDV_DEVIS` may be blank (treated as 0).
 - Charts are embedded as base64 (no local file paths in the email).
-- **Dossiers réalisés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in **report-to-date** (`season_window_for_metrics`: season start → `min(as_of, season end)`). **Dossiers confirmés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in the **full calendar current season** (e.g. HIVER 15/11–30/04) — proxy until a dedicated confirmation date exists. **Week row:** réalisés and confirmés share the same week window (confirmés card still `-` in the UI). **Realised revenue (week)** sums `PDV_DEVIS_CONFIRME` on confirmed rows in the reference week; **realised revenue (season row)** uses the **full calendar current season**, same as proposed dossiers (season). **CONFIRME** (no accent) = **CONFIRMÉ**.
+- **Dossiers réalisés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in **report-to-date** (`season_window_for_metrics`: season start → `min(as_of, season end)`). **Dossiers confirmés (saison)** = distinct confirmed `CLIENT_ID` with `Date_opération` in the **full calendar current season** (e.g. HIVER 15/11–30/04) — proxy until a dedicated confirmation date exists. **Week row:** **réalisés (semaine)** = distinct confirmed `CLIENT_ID` with `Date_opération` in the reference week; **confirmés (semaine)** = distinct `CLIENT_ID` on the extract whose `client_key` matches **any** Clients row with **`DATE CONFIRME`** in that week (raw sheet + `client_db` passed from `main`). **Realised revenue (week)** sums `PDV_DEVIS_CONFIRME` on confirmed rows in the reference week; **realised revenue (season row)** uses the **full calendar current season**, same as proposed dossiers (season). **CONFIRME** (no accent) = **CONFIRMÉ**.
 - **Propositions envoyées** (email label; was “Dossiers proposés”) — **week row:** distinct `CLIENT_ID` with at least one **`Date_Demande`** in the **reference week** (Mon–Sun ending last Sunday ≤ report date), **any** `CONFIRME` / any `Date_opération`. **Season row:** distinct `CLIENT_ID` with at least one **`Date_opération`** in **`current_season.start` … `current_season.end`** (full calendar season). **Chiffre d’affaires** lines in the email are labelled **HT** (amounts are ex-VAT). The email **Définitions** block spells out dates for the run.
 - **Provisional CA** (`compute_ca_provisionnel`) — **potential season revenue** (updates with `--as-of` / report date): **(1)** Sum `PDV_DEVIS_CONFIRME` on **CONFIRMÉ** rows with `Date_opération` in the **full** calendar season (e.g. HIVER **15/11→30/04 inclusive**). **(2)** Add **pipeline**: **EN COURS** rows (non annulés) with `Date_opération` from the **day after** `min(week_end, season end)` **through** `season end` (e.g. 30/04 for HIVER — not into May). **`week_end`** = Sunday end of that same reference week. Per `CLIENT_ID` in that slice: **sum** `PDV_DEVIS` ÷ **distinct** `DEVIS_ID`, then sum across clients and add to (1). Same structure for the **next** season row.
 

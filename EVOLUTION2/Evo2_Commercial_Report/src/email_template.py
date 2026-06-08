@@ -132,7 +132,6 @@ def build_dossier_kpi_cards_html(kpi: WeeklyKpiResult, week_range_label: str) ->
     2×3 grid: row Semaine = réalisés / propositions envoyées / confirmés; row Saison = same.
     Reading down a column compares week vs season for one category.
     """
-    d = _KPI_PLACEHOLDER
     season_report_start = kpi.current_season.start.strftime("%d/%m/%Y")
     season_report_end = kpi.season_metrics_end.strftime("%d/%m/%Y")
     season_full_start = kpi.current_season.start.strftime("%d/%m/%Y")
@@ -157,7 +156,7 @@ def build_dossier_kpi_cards_html(kpi: WeeklyKpiResult, week_range_label: str) ->
         )
         + _dossier_metric_card(
             title="Dossiers confirmés",
-            value=d,
+            value=format_int(kpi.dossiers_confirme_semaine),
             period_line=period_semaine,
         )
         + "</tr>"
@@ -200,7 +199,7 @@ def _kpi_ca_rows(kpi: WeeklyKpiResult) -> str:
     d = _KPI_PLACEHOLDER
     rows = [
         ("Chiffre d'affaires réalisé HT (semaine)", format_currency(kpi.ca_realise_semaine), d, d),
-        ("Chiffre d'affaires réalisé HT (saison en cours)", format_currency(kpi.ca_realise_saison), d, d),
+        ("Chiffre d'affaires confirmé HT (saison en cours)", format_currency(kpi.ca_realise_saison), d, d),
         (
             f"CA provisionnel HT — {kpi.current_season.label}",
             format_currency(kpi.ca_provisionnel_saison_cours),
@@ -260,7 +259,7 @@ def build_weekly_email_html(
 
     definitions_html = f"""
                 <div style="font-size:11px;line-height:1.65;color:#e2e5eb;">
-                  <strong>Source.</strong> Feuille <code>extract_devis</code> (Evolution2_Report_V13.xlsm) ; enrichissement <code>TYPE_DE_CLIENT</code> via la base Clients (MARKETING_MAIL), jointure NOM_CLIENT + NOM_AGENT.<br/><br/>
+                  <strong>Source.</strong> Feuille <code>extract_devis</code> (Evolution2_Report_V13.xlsm) ; enrichissement <code>TYPE_DE_CLIENT</code> et <code>DATE CONFIRME</code> via la base Clients (feuille Excel configurée côté pipeline, ex. <code>CLIENTS</code>), jointure NOM_CLIENT + NOM_AGENT.<br/><br/>
 
                   <strong>Semaine de référence.</strong> Lundi–dimanche, celle qui se termine au <strong>dernier dimanche ≤ date du rapport</strong> (un lundi matin = dimanche d’hier ; un dimanche = ce même dimanche, pas la semaine d’avant).<br/><br/>
 
@@ -269,16 +268,16 @@ def build_weekly_email_html(
                   <strong>1. Dossiers.</strong> Un dossier = un <code>CLIENT_ID</code> distinct.
                   <em>Réalisés (saison)</em> : confirmés, <code>Date_opération</code> du début de saison au <strong>min(date du rapport, fin de saison)</strong> ({sm_start} – {sm_end} pour ce rapport).
                   <em>Confirmés (saison)</em> : confirmés, <code>Date_opération</code> sur toute la <strong>saison calendaire</strong> ({proposed_season_start} – {proposed_season_end}) — approximation en l’absence d’une date de confirmation dédiée.
-                  <em>Semaine</em> : réalisés = confirmés sur la semaine de référence ; <em>confirmés (semaine)</em> : « - » pour l’instant.
+                  <em>Semaine</em> : <em>réalisés</em> = confirmés, <code>Date_opération</code> dans la semaine de référence ; <em>confirmés (semaine)</em> = <code>CLIENT_ID</code> distincts sur l’extract dont la clé <strong>NOM_CLIENT + NOM_AGENT</strong> correspond à <strong>au moins une ligne</strong> de la feuille Clients avec <strong>DATE CONFIRME</strong> dans la même semaine (toutes les lignes Clients comptent, pas seulement une ligne « représentative »).
                   <em>Propositions envoyées (semaine)</em> : <code>Date_Demande</code> dans la semaine de référence, tous statuts.
                   <em>Propositions envoyées (saison)</em> : <code>Date_opération</code> sur toute la saison calendaire.
                   <em>N-1 / Écart</em> : « - » en attente d’historique.<br/><br/>
 
-                  <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. <em>CA réalisé</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence (semaine) ou dans la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}) pour la ligne saison.
-                  <em>CA provisionnel</em> : <strong>(1)</strong> même base confirmée que le CA réalisé saison (saison calendaire entière, ligne en cours ou suivante).
+                  <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. <em>CA réalisé (semaine)</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence. <em>CA confirmé (saison en cours)</em> : même somme sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <em>CA provisionnel</em> : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière, ligne en cours ou suivante).
                   <strong>(2)</strong> + complément : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients. Saison suivante : mêmes règles sur ({next_season_start} – {next_season_end}).<br/><br/>
 
-                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA réalisé (saison) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract).<br/><br/>
+                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA confirmé (saison en cours) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract).<br/><br/>
 
                   <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, PDV confirmé agrégé, PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).<br/><br/>
 

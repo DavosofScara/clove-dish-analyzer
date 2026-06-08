@@ -110,7 +110,7 @@ def main() -> None:
     client_db = load_client_database()
     df = enrich_with_client_type(df, client_db)
 
-    kpis = compute_weekly_kpis(df, as_of=as_of)
+    kpis = compute_weekly_kpis(df, as_of=as_of, client_db=client_db)
     cdp_df, sanity = compute_section1_cdp(df)
 
     logging.info("Sanity CDP: %s", sanity)

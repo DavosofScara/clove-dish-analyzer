@@ -19,7 +19,10 @@ Definitions (locked):
   Mon–Sun week ending on the last Sunday ≤ ``as_of``, so the window updates as the season progresses.
 - One dossier = one CLIENT_ID (distinct counts).
 
-Week row: réalisés = confirmés (same window). Saison row: confirmés = full season; réalisés = report-to-date.
+Week row: **réalisés (semaine)** = distinct CLIENT_ID, CONFIRMÉ, Date_opération in the reference week.
+**Confirmés (semaine)** = distinct **CLIENT_ID** on the extract whose **client_key** matches **any** row on the
+Clients sheet with **DATE CONFIRME** in the reference week (not only the single row chosen for TYPE merge).
+Saison row: confirmés = full season (Date_opération proxy); réalisés = report-to-date.
 
 Realised revenue (week row): sum PDV_DEVIS_CONFIRME on confirmed rows with Date_opération in the week window.
 
@@ -34,7 +37,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
-from .load_data import get_ci_column
+from .load_data import augment_client_key, get_ci_column
 from .periods import (
     SeasonPeriod,
     date_in_range,
@@ -46,6 +49,9 @@ from .periods import (
 from .status_norm import is_cancelled_status, is_confirmed_exact, is_en_cours
 
 logger = logging.getLogger(__name__)
+
+# Merged from Clients Database in enrich_with_client_type (NOM_CLIENT + NOM_AGENT).
+DATE_CONFIRME_CLIENT_COL = "DATE_CONFIRME_CLIENT"
 
 
 def _to_float(x: Any) -> float:
@@ -108,6 +114,129 @@ def _resolve_columns(df: pd.DataFrame) -> Dict[str, str]:
 
 def _mask_period(df: pd.DataFrame, date_col: str, start: date, end: date) -> pd.Series:
     return df[date_col].apply(lambda d: date_in_range(d, start, end))
+
+
+def _unique_clients_by_merged_date_col(
+    df: pd.DataFrame,
+    client_col: str,
+    date_col: str,
+    start: date,
+    end: date,
+) -> int:
+    """Distinct non-empty CLIENT_ID with ≥1 row where date_col (enriched) ∈ [start, end]."""
+    if date_col not in df.columns:
+        return 0
+    m = _mask_period(df, date_col, start, end)
+    sub = df.loc[m, client_col].astype(str).str.strip()
+    return int(sub[sub != ""].nunique())
+
+
+def _dossiers_confirme_semaine_week(
+    extract_df: pd.DataFrame,
+    cols: Dict[str, str],
+    week_start: date,
+    week_end: date,
+    client_db: Optional[pd.DataFrame],
+) -> int:
+    """
+    Week « confirmés »: distinct CLIENT_ID on extract whose client_key appears on **any** CLIENTS
+    row with DATE_CONFIRME in [week_start, week_end]. Avoids relying on a single merged row per key
+    (TYPE / DATE_OPERATION pick_row can omit the row that holds the confirmation date).
+    """
+    if client_db is not None and DATE_CONFIRME_CLIENT_COL in client_db.columns:
+        cdf = augment_client_key(client_db.copy())
+        m = _mask_period(cdf, DATE_CONFIRME_CLIENT_COL, week_start, week_end)
+        keys = (
+            cdf.loc[m, "client_key"]
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .unique()
+        )
+        key_set = {str(k) for k in keys if str(k).strip()}
+        if "client_key" not in extract_df.columns:
+            return _unique_clients_by_merged_date_col(
+                extract_df, cols["CLIENT_ID"], DATE_CONFIRME_CLIENT_COL, week_start, week_end
+            )
+        if not key_set:
+            return 0
+        cid = cols["CLIENT_ID"]
+        ex_sub = extract_df.loc[extract_df["client_key"].isin(key_set), cid]
+        s = ex_sub.astype(str).str.strip()
+        return int(s[s != ""].nunique())
+    return _unique_clients_by_merged_date_col(
+        extract_df, cols["CLIENT_ID"], DATE_CONFIRME_CLIENT_COL, week_start, week_end
+    )
+
+
+def _date_confirme_week_diagnostics(
+    df: pd.DataFrame,
+    week_start: date,
+    week_end: date,
+    client_raw_df: Optional[pd.DataFrame] = None,
+) -> Dict[str, Any]:
+    """
+    Explain week « confirmés » diagnostics: merged column on extract vs raw CLIENTS rows in week.
+    """
+    col = DATE_CONFIRME_CLIENT_COL
+    out: Dict[str, Any] = {
+        "date_confirme_column_on_extract": col in df.columns,
+        "kpi_confirme_semaine_uses_raw_client_sheet": bool(
+            client_raw_df is not None and col in getattr(client_raw_df, "columns", [])
+        ),
+    }
+    if client_raw_df is not None and col in client_raw_df.columns:
+        cdf = augment_client_key(client_raw_df.copy())
+        mw = _mask_period(cdf, col, week_start, week_end)
+        out["client_db_rows_in_reference_week"] = int(mw.sum())
+        out["client_db_distinct_keys_in_reference_week"] = int(
+            cdf.loc[mw, "client_key"].astype(str).str.strip().replace("", pd.NA).dropna().nunique()
+        )
+    if col not in df.columns:
+        out["hint"] = "Column missing after enrich — check Clients sheet + rename (DATE CONFIRME)."
+        return out
+    ser = df[col]
+    nn = int(ser.notna().sum())
+    m = _mask_period(df, col, week_start, week_end)
+    n_in_week = int(m.sum())
+    out["extract_rows_date_confirme_nonnull"] = nn
+    out["extract_rows_date_confirme_in_reference_week"] = n_in_week
+    out["client_key_on_extract"] = bool("client_key" in df.columns)
+    sub = ser.dropna()
+    if len(sub):
+        dates = []
+        for x in sub.unique():
+            if hasattr(x, "date") and callable(getattr(x, "date")):
+                dates.append(x.date())
+            elif isinstance(x, date):
+                dates.append(x)
+        if dates:
+            u = sorted(set(dates))
+            out["date_confirme_min_on_extract"] = str(u[0])
+            out["date_confirme_max_on_extract"] = str(u[-1])
+            out["date_confirme_sample_values"] = [str(d) for d in u[:8]]
+    if nn == 0:
+        out["hint"] = (
+            "No DATE_CONFIRME on any extract row — jointure NOM_CLIENT+NOM_AGENT likely fails "
+            "(names differ vs Clients DB), or column empty / unparsed on CLIENTS sheet."
+        )
+    elif n_in_week == 0:
+        if out.get("client_db_rows_in_reference_week", 0) > 0:
+            out["hint"] = (
+                "CLIENTS has ≥1 row with DATE_CONFIRME in the reference week, but the merged extract "
+                "column has no row in that week (merged uses max per client_key). "
+                "dossiers_confirme_semaine is counted from any CLIENTS row in the week when client_db is passed."
+            )
+        else:
+            out["hint"] = (
+                "Dates exist on extract merged column but none fall in week_start..week_end — "
+                "reference week follows previous_completed_week(as_of); use --as-of YYYY-MM-DD "
+                "so the Sunday ending that week is on or before as_of."
+            )
+    else:
+        out["hint"] = ""
+    return out
 
 
 def _unique_clients_in_period(
@@ -267,10 +396,14 @@ def compute_ca_provisionnel(
 def compute_weekly_kpis(
     df: pd.DataFrame,
     as_of: Optional[date] = None,
+    client_db: Optional[pd.DataFrame] = None,
 ) -> WeeklyKpiResult:
     """
     Compute all KPIs. `as_of` is typically the send date (e.g. Monday);
     the week window is the previous completed Mon–Sun.
+
+    ``client_db``: raw Clients workbook frame (same as ``load_client_database()``). When passed,
+    week « dossiers confirmés » uses **any** CLIENTS row with DATE CONFIRME in the week (recommended).
     """
     import datetime as dt
 
@@ -285,13 +418,18 @@ def compute_weekly_kpis(
     next_se = next_season_after(current_season)
     s_start, s_end = season_window_for_metrics(current_season, as_of)
 
-    # Realised dossier count = confirmed (same definition; see README)
-    dossiers_confirme_sem = _unique_clients_in_period(
+    # Week « réalisés (semaine)»: same formula as before we split the week row — CONFIRMÉ + Date_opération
+    # in the reference week (was previously identical to dossiers_confirme_semaine when both used
+    # Date_opération). Week « confirmés (semaine)» only: DATE_CONFIRME_CLIENT from Clients DB in that week.
+    dossiers_realise_sem = _unique_clients_in_period(
         df,
         cols,
         week_start,
         week_end,
         row_mask_extra=df[cols["CONFIRME"]].map(is_confirmed_exact),
+    )
+    dossiers_confirme_sem = _dossiers_confirme_semaine_week(
+        df, cols, week_start, week_end, client_db
     )
     dossiers_confirme_sai = _unique_clients_in_period(
         df,
@@ -300,7 +438,6 @@ def compute_weekly_kpis(
         current_season.end,
         row_mask_extra=df[cols["CONFIRME"]].map(is_confirmed_exact),
     )
-    dossiers_realise_sem = dossiers_confirme_sem
     dossiers_realise_sai = _unique_clients_in_period(
         df,
         cols,
@@ -353,13 +490,30 @@ def compute_weekly_kpis(
         df, cols, current_season.start, current_season.end
     )
 
+    date_confirme_diag = _date_confirme_week_diagnostics(
+        df, week_start, week_end, client_raw_df=client_db
+    )
+    if date_confirme_diag.get("hint"):
+        logger.info(
+            "Dossiers confirmés (semaine)=%s — %s Diagnostics: %s",
+            dossiers_confirme_sem,
+            date_confirme_diag["hint"],
+            {k: v for k, v in date_confirme_diag.items() if k != "hint"},
+        )
+
     validation: Dict[str, Any] = {
+        "as_of": str(as_of),
         "source_rows": n_rows,
         "unique_client_id": n_clients_all,
         "week_start": str(week_start),
         "week_end": str(week_end),
+        "date_confirme_diagnostics": date_confirme_diag,
         "dossiers_propose_semaine_basis": "Date_Demande",
         "dossiers_propose_saison_basis": "Date_opération",
+        "dossiers_confirme_semaine_basis": (
+            "any CLIENTS row: DATE_CONFIRME in week → client_key → distinct CLIENT_ID on extract "
+            "(when client_db passed); else merged column on extract"
+        ),
         "dossiers_confirme_saison_window": f"{current_season.start}..{current_season.end}",
         "dossiers_realise_saison_window": f"{s_start}..{s_end}",
         "current_season_label": current_season.label,

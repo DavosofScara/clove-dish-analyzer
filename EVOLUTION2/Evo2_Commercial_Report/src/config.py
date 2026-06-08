@@ -62,12 +62,21 @@ EXCEL_PATH = Path(
 )
 EXCEL_SHEET_NAME = "extract_devis"
 
-CLIENT_DB_PATH = Path(
+# Local path (pandas reads the synced file). Override with CLIENT_DB_PATH in .env.
+_DEFAULT_CLIENT_DB = (
     "/Users/davidcraig/Evolution2 Events Dropbox/"
     "djacraig@hotmail.com/DOSSIERS_TB/ALL_DOSSIERS_CA_2025/CLIENT_DATABASE/"
     "Clients Database.xlsx"
 )
-CLIENT_DB_SHEET_NAME = "MARKETING_MAIL"
+_client_db_path_raw = (os.getenv("CLIENT_DB_PATH") or "").strip()
+CLIENT_DB_PATH = Path(_client_db_path_raw) if _client_db_path_raw else Path(_DEFAULT_CLIENT_DB)
+
+# Share link for humans / email copy (optional — not used to open the workbook).
+DROPBOX_CLIENT_DATABASE_URL = (os.getenv("DROPBOX_CLIENT_DATABASE_URL") or "").strip()
+
+# Sheet name in Clients Database.xlsx. Default unchanged from original code (MARKETING_MAIL).
+# Set CLIENT_DB_SHEET_NAME=CLIENTS in .env when DATE CONFIRME lives on the CLIENTS sheet.
+CLIENT_DB_SHEET_NAME = os.getenv("CLIENT_DB_SHEET_NAME", "MARKETING_MAIL")
 
 
 # ---------------------------------------------------------------------------
