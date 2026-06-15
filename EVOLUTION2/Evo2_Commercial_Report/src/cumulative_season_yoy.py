@@ -27,6 +27,7 @@ from matplotlib.ticker import FuncFormatter
 from scipy.interpolate import PchipInterpolator
 
 from .config import CLOVE_GREEN, OUTPUTS_DIR, THEME_BORDER, THEME_DARK, THEME_MUTED, THEME_TEXT
+from .historical_master import augment_df_for_prior_season, load_ete_2025_definitive, summarize_ete_2025
 from .load_data import coerce_number, get_ci_column, load_excel_data
 from .periods import date_in_range, previous_season_before, season_containing
 from .status_norm import is_confirmed_exact
@@ -190,8 +191,14 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
     current = season_containing(as_of)
     prior = previous_season_before(current)
 
+    df_prior = augment_df_for_prior_season(df, prior)
+    if prior.label == "ÉTÉ 25":
+        hist = load_ete_2025_definitive()
+        if not hist.empty:
+            logger.info("ÉTÉ 25 prior season from historical master: %s", summarize_ete_2025(hist))
+
     daily_current = compute_daily_confirmed_pdv(df, cols, current.start, current.end)
-    daily_prior = compute_daily_confirmed_pdv(df, cols, prior.start, prior.end)
+    daily_prior = compute_daily_confirmed_pdv(df_prior, cols, prior.start, prior.end)
 
     cap = min(as_of, current.end)
     d_cur, y_cur_raw = cumulative_series_by_calendar_date(daily_current, current.start, current.end, cap)

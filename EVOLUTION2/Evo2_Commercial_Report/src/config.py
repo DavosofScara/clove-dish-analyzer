@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date
 from pathlib import Path
 from typing import List
 
@@ -19,6 +20,25 @@ PROJECT_DIR = Path(__file__).resolve().parents[1]
 REPO_DIR = PROJECT_DIR.parent
 OUTPUTS_DIR = PROJECT_DIR / "outputs"
 LOG_DIR = PROJECT_DIR / "logs"
+HISTORICAL_DATA_DIR = PROJECT_DIR / "data" / "historical"
+
+# Frozen legacy DOSSIER TRAVAIL copy (Dropbox New Loads snapshot).
+NEW_LOADS_DIR = Path(
+    "/Users/davidcraig/Evolution2 Events Dropbox/"
+    "djacraig@hotmail.com/New Loads/DOSSIERS CA copy"
+)
+DOSSIERS_TB_ROOT = Path(
+    "/Users/davidcraig/Evolution2 Events Dropbox/"
+    "djacraig@hotmail.com/DOSSIERS_TB"
+)
+
+ETE_2025_START = date(2025, 5, 1)
+ETE_2025_END = date(2025, 11, 15)
+ETE_2025_EXPORT_END = date(2025, 11, 14)
+DOSSIER_TRAVAIL_MASTER_CSV = HISTORICAL_DATA_DIR / "dossier_travail_master.csv"
+DOSSIER_TB_PRE_V13_CSV = HISTORICAL_DATA_DIR / "dossier_tb_pre_v13.csv"
+ETE_2025_DEFINITIVE_CSV = HISTORICAL_DATA_DIR / "ete_2025_definitive.csv"
+ETE_2025_EXPORT_XLSX = HISTORICAL_DATA_DIR / "ete_2025_confirme_export.xlsx"
 
 
 # ---------------------------------------------------------------------------
