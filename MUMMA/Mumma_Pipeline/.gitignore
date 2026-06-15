@@ -1,0 +1,14 @@
+# Secrets
+.env.local
+pipelines/mumma/.env.local
+
+# Data & generated outputs
+data/
+reports/
+pipelines/mumma/logs/
+
+# OS / Python
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

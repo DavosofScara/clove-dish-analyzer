@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clove.mumma.pipeline.wake</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string># Check if it's Monday and between 9 AM and 11 AM, then run the pipeline
+DAY=$(date +%u)
+HOUR=$(date +%H)
+if [ "$DAY" = "1" ] && [ "$HOUR" -ge 9 ] && [ "$HOUR" -lt 11 ]; then
+    # Check if we've already run today
+    LAST_RUN_FILE="$HOME/Library/Logs/mumma_pipeline_last_run.txt"
+    TODAY=$(date +%Y-%m-%d)
+    if [ ! -f "$LAST_RUN_FILE" ] || [ "$(cat "$LAST_RUN_FILE")" != "$TODAY" ]; then
+        /Users/davidcraig/code/clove/MUMMA/Mumma_Pipeline/pipelines/mumma/run_mumma_pipeline.sh
+    fi
+fi</string>
+    </array>
+    
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>9</integer>
+        <key>Minute</key>
+        <integer>5</integer>
+    </dict>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/davidcraig/Library/Logs/mumma_pipeline_wake.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/davidcraig/Library/Logs/mumma_pipeline_wake_error.log</string>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
+
