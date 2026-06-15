@@ -201,13 +201,13 @@ def _kpi_ca_rows(kpi: WeeklyKpiResult) -> str:
         ("Chiffre d'affaires réalisé HT (semaine)", format_currency(kpi.ca_realise_semaine), d, d),
         ("Chiffre d'affaires confirmé HT (saison en cours)", format_currency(kpi.ca_realise_saison), d, d),
         (
-            f"CA provisionnel HT — {kpi.current_season.label}",
+            f"CA prévisionnel HT — {kpi.current_season.label} (En cours)",
             format_currency(kpi.ca_provisionnel_saison_cours),
             d,
             d,
         ),
         (
-            f"CA provisionnel HT — {kpi.next_season.label} (saison suivante)",
+            f"CA prévisionnel HT — {kpi.next_season.label} (saison suivante)",
             format_currency(kpi.ca_provisionnel_saison_suivante),
             d,
             d,
@@ -257,6 +257,7 @@ def build_weekly_email_html(
     sm_start = kpi.current_season.start.strftime("%d/%m/%Y")
     sm_end = kpi.season_metrics_end.strftime("%d/%m/%Y")
     report_date_label = kpi.season_metrics_end.strftime("%d/%m/%Y")
+    week_end_label = kpi.week_end.strftime("%d/%m/%Y")
 
     definitions_html = f"""
                 <div style="font-size:11px;line-height:1.65;color:#e2e5eb;">
@@ -275,15 +276,17 @@ def build_weekly_email_html(
                   <em>N-1 / Écart</em> : « - » en attente d’historique.<br/><br/>
 
                   <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. <em>CA réalisé (semaine)</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence. <em>CA confirmé (saison en cours)</em> : même somme sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
-                  <em>CA provisionnel</em> : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière, ligne en cours ou suivante).
-                  <strong>(2)</strong> + complément : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients. Saison suivante : mêmes règles sur ({next_season_start} – {next_season_end}).<br/><br/>
+                  <em>CA prévisionnel (En cours)</em> — ligne « {kpi.current_season.label} (En cours) » : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière).
+                  <strong>(2)</strong> + complément pipeline : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients.
+                  <em>CA prévisionnel (saison suivante)</em> — ligne « {kpi.next_season.label} (saison suivante) » : mêmes règles sur ({next_season_start} – {next_season_end}).
+                  <em>Coupe des dates</em> : le CA prévisionnel utilise le <strong>dimanche de fin de semaine de référence</strong> ({week_end_label}) pour la fenêtre EN COURS ; le graphique « PDV par site » (saison en cours), les dossiers réalisés (saison) et la courbe CA cumulée utilisent la <strong>date du rapport</strong> ({report_date_label}) — ces deux dates peuvent différer si le rapport est produit en milieu de semaine.<br/><br/>
 
-                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA confirmé (saison en cours) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract).<br/><br/>
+                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA confirmé (saison en cours) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract). La courbe <em>N-1</em> couvre la <strong>saison précédente entière</strong> (jusqu’à sa fin calendaire). Pour <strong>ÉTÉ 25</strong>, la ligne N-1 provient du fichier historique consolidé <code>ete_2025_definitive.csv</code> (DOSSIER TRAVAIL recap + dossiers TB pré-V13), pas seulement de V13 ; les autres saisons N-1 restent sur l’extract V13.<br/><br/>
 
-                  <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, PDV confirmé agrégé, PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).
-                  <strong>Graphique marge budget vs réelle</strong> : feuille <code>Marge_Reelle_Devis</code> (lignes <code>ALL_LINES_VALIDE = True</code>) ; par CDP, <strong>moyenne simple</strong> de <code>100 × marge € ÷ PDV_DEVIS_CONFIRME</code> — budget = <code>MARGE_EVENTS_FINAL_BUDGET</code>, réelle = <code>MARGE_EVENTS_REEL</code> (marge avant commission partenaire site EVO2).<br/><br/>
+                  <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, somme <code>PDV_DEVIS</code> sur lignes confirmées (colonne « PDV conf. »), PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).
+                  <strong>Graphique marge budget vs réelle</strong> : feuille <code>Marge_Reelle_Devis</code> (lignes <code>ALL_LINES_VALIDE = True</code>) ; par CDP, <strong>moyenne simple</strong> de <code>100 × marge € ÷ PDV_DEVIS</code> — budget = <code>MARGE_EVENTS_FINAL_BUDGET</code>, réelle = <code>MARGE_EVENTS_REELLE</code> (marge avant commission partenaire site EVO2).<br/><br/>
 
-                  <strong>4. PDV par site.</strong> <em>Saison en cours</em> : confirmés, <code>Date_opération</code> du début de saison à la <strong>date du rapport</strong> (même fenêtre que la légende sous le graphique). <em>Saison suivante</em> : toute la saison suivante ({next_season_start} – {next_season_end}).
+                  <strong>4. PDV par site.</strong> Somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées, regroupée par la colonne <code>SITE</code> de l’extract (<strong>pas</strong> <code>SITE_EVOLUTION</code>, <code>SITE_EVO2</code> ni CDP). <em>Saison en cours</em> : confirmés, <code>Date_opération</code> du début de saison à la <strong>date du rapport</strong> ({sm_start} – {sm_end} ; même fenêtre que la légende sous le graphique). <em>Saison suivante</em> : toute la saison suivante ({next_season_start} – {next_season_end}).
                 </div>
 """
 
