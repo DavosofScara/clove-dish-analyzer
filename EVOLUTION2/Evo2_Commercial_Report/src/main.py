@@ -36,7 +36,12 @@ from .load_data import (
 )
 from .metrics import compute_cdp_margin_pct_averages, compute_section1_cdp
 from .send_email import send_email
+from .periods import fiscal_year_containing
 from .weekly_kpis import compute_weekly_kpis
+
+# Section 3.2 charts: softer greens so 3.1 vs 3.2 are visually distinct.
+CDP_FISCAL_YEAR_GREEN_ALPHA = 0.52
+CDP_FISCAL_YEAR_BUDGET_ALPHA = 0.34
 
 
 def setup_logging() -> None:
@@ -117,25 +122,50 @@ def main() -> None:
     df = enrich_with_client_type(df, client_db)
 
     kpis = compute_weekly_kpis(df, as_of=as_of, client_db=client_db)
-    cdp_df, sanity = compute_section1_cdp(df)
+    current_season = kpis.current_season
+    current_fiscal_year = fiscal_year_containing(as_of)
 
-    logging.info("Sanity CDP: %s", sanity)
+    cdp_season_df, sanity_season = compute_section1_cdp(
+        df, period_start=current_season.start, period_end=current_season.end
+    )
+    cdp_year_df, sanity_year = compute_section1_cdp(
+        df, period_start=current_fiscal_year.start, period_end=current_fiscal_year.end
+    )
+
+    logging.info("Sanity CDP (saison): %s", sanity_season)
+    logging.info("Sanity CDP (année): %s", sanity_year)
     logging.info("Validation KPI: %s", kpis.validation)
 
-    chart_scatter_uri = render_cdp_scatter(cdp_df)
+    chart_scatter_season_uri = render_cdp_scatter(cdp_season_df)
+    chart_scatter_year_uri = render_cdp_scatter(
+        cdp_year_df, green_alpha=CDP_FISCAL_YEAR_GREEN_ALPHA
+    )
     marge_df = load_marge_reelle_devis()
-    margin_cdp_df = compute_cdp_margin_pct_averages(marge_df)
-    chart_margin_uri = render_cdp_margin_bars(margin_cdp_df)
+    margin_season_df = compute_cdp_margin_pct_averages(
+        marge_df, period_start=current_season.start, period_end=current_season.end
+    )
+    margin_year_df = compute_cdp_margin_pct_averages(
+        marge_df,
+        period_start=current_fiscal_year.start,
+        period_end=current_fiscal_year.end,
+    )
+    chart_margin_season_uri = render_cdp_margin_bars(margin_season_df)
+    chart_margin_year_uri = render_cdp_margin_bars(
+        margin_year_df,
+        green_alpha=CDP_FISCAL_YEAR_GREEN_ALPHA,
+        budget_alpha=CDP_FISCAL_YEAR_BUDGET_ALPHA,
+    )
     logging.info(
-        "CDP margin chart: %d CDPs shown from %d source rows",
-        len(margin_cdp_df),
+        "CDP margin charts: saison %d CDPs (%d source rows), année %d CDPs",
+        len(margin_season_df),
         len(marge_df),
+        len(margin_year_df),
     )
     chart_cumulative_yoy_uri = render_cumulative_season_yoy_data_uri(df, as_of)
 
     df_site = add_site_label_column(df)
     site_totals = compute_site_confirmed_pdv_by_season(
-        df_site, kpis.current_season.start, kpis.season_metrics_end
+        df_site, kpis.current_season.start, kpis.current_season.end
     )
     chart_site_uri = render_site_pdv_season_bars(site_totals, accent="blue")
     site_totals_next = compute_site_confirmed_pdv_by_season(
@@ -148,18 +178,31 @@ def main() -> None:
         len(site_totals_next),
     )
 
-    section_cdp = cdp_df.head(8)
-    cdp_rows = build_section_rows(
-        section_cdp,
+    cdp_season_rows = build_section_rows(
+        cdp_season_df.head(8),
+        ["CDP", "Clients_uniques", "Taux_confirmation", "PDV_confirme", "PDV_median_client"],
+        [str, lambda v: f"{int(v)}", format_percent, format_currency, format_currency],
+        [False, True, True, True, True],
+    )
+    cdp_year_rows = build_section_rows(
+        cdp_year_df.head(8),
         ["CDP", "Clients_uniques", "Taux_confirmation", "PDV_confirme", "PDV_median_client"],
         [str, lambda v: f"{int(v)}", format_percent, format_currency, format_currency],
         [False, True, True, True, True],
     )
 
     week_label = f"{kpis.week_start.strftime('%d/%m/%Y')} – {kpis.week_end.strftime('%d/%m/%Y')}"
+    cdp_season_period_label = (
+        f"Période : du {current_season.start.strftime('%d/%m/%Y')} au "
+        f"{current_season.end.strftime('%d/%m/%Y')}, {current_season.label}"
+    )
+    cdp_year_period_label = (
+        f"Période : du {current_fiscal_year.start.strftime('%d/%m/%Y')} au "
+        f"{current_fiscal_year.end.strftime('%d/%m/%Y')}, {current_fiscal_year.label}"
+    )
     site_period_label = (
         f"Période : du {kpis.current_season.start.strftime('%d/%m/%Y')} au "
-        f"{kpis.season_metrics_end.strftime('%d/%m/%Y')}, {kpis.current_season.label}"
+        f"{kpis.current_season.end.strftime('%d/%m/%Y')}, {kpis.current_season.label}"
     )
     site_next_period_label = (
         f"Période : du {kpis.next_season.start.strftime('%d/%m/%Y')} au "
@@ -173,9 +216,16 @@ def main() -> None:
         clove_logo_path=clove_logo,
         evo2_logo_path=evo2_logo,
         kpi=kpis,
-        cdp_section_rows=cdp_rows,
-        chart_scatter_uri=chart_scatter_uri,
-        chart_margin_uri=chart_margin_uri,
+        cdp_season_rows=cdp_season_rows,
+        cdp_season_period_label=cdp_season_period_label,
+        chart_scatter_season_uri=chart_scatter_season_uri,
+        chart_margin_season_uri=chart_margin_season_uri,
+        cdp_year_rows=cdp_year_rows,
+        cdp_year_period_label=cdp_year_period_label,
+        fiscal_year_start=current_fiscal_year.start.strftime("%d/%m/%Y"),
+        fiscal_year_end=current_fiscal_year.end.strftime("%d/%m/%Y"),
+        chart_scatter_year_uri=chart_scatter_year_uri,
+        chart_margin_year_uri=chart_margin_year_uri,
         chart_cumulative_yoy_uri=chart_cumulative_yoy_uri,
         chart_site_bars_uri=chart_site_uri,
         site_chart_period_label=site_period_label,

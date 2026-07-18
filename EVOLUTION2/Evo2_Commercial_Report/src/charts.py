@@ -212,7 +212,7 @@ def render_site_pdv_season_bars(site_totals: pd.Series, *, accent: str = "blue")
     return f"data:image/png;base64,{b64}"
 
 
-def render_cdp_scatter(cdp_df: pd.DataFrame) -> str:
+def render_cdp_scatter(cdp_df: pd.DataFrame, *, green_alpha: float = 0.9) -> str:
     """
     CDP chart on dark background (same family as site bars): X = confirmation rate (%),
     Y = median PDV per client (€). **Bubble area ∝ total PDV confirmé** for that CDP
@@ -269,7 +269,7 @@ def render_cdp_scatter(cdp_df: pd.DataFrame) -> str:
                 [yi],
                 s=a,
                 c=[CLOVE_GREEN],
-                alpha=0.9,
+                alpha=green_alpha,
                 edgecolors="#a8f578",
                 linewidths=1.2,
                 zorder=2,
@@ -342,7 +342,12 @@ def _empty_chart_data_uri(*, figsize: tuple[float, float] = (9.0, 5.8)) -> str:
     return f"data:image/png;base64,{b64}"
 
 
-def render_cdp_margin_bars(margin_df: pd.DataFrame) -> str:
+def render_cdp_margin_bars(
+    margin_df: pd.DataFrame,
+    *,
+    green_alpha: float = 1.0,
+    budget_alpha: float = 1.0,
+) -> str:
     """
     Grouped bars per CDP: simple average margin % of PDV_DEVIS (budget vs réelle).
     Same footprint and dark theme as ``render_cdp_scatter``.
@@ -371,6 +376,7 @@ def render_cdp_margin_bars(margin_df: pd.DataFrame) -> str:
             width,
             label="Marge budget (moy. %)",
             color=CLOVE_GREEN_MUTED,
+            alpha=budget_alpha,
             edgecolor=THEME_BORDER,
             linewidth=0.6,
             zorder=2,
@@ -381,6 +387,7 @@ def render_cdp_margin_bars(margin_df: pd.DataFrame) -> str:
             width,
             label="Marge réelle (moy. %)",
             color=CLOVE_GREEN,
+            alpha=green_alpha,
             edgecolor="#a8f578",
             linewidth=0.6,
             zorder=3,

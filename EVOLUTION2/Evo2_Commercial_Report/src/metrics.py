@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, Tuple
+from datetime import date
+from typing import Dict, Optional, Tuple
 
 import pandas as pd
 
 from .load_data import get_ci_column, normalize_str_series
+from .periods import date_in_range
 from .status_norm import is_cancelled_status, is_confirmed_exact, is_en_cours
 
 
@@ -22,7 +24,25 @@ def _prep_client_df(df: pd.DataFrame) -> pd.DataFrame:
     return df[df[client_col] != ""]
 
 
-def compute_section1_cdp(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, float]]:
+def filter_rows_by_date_operation(
+    df: pd.DataFrame,
+    period_start: date,
+    period_end: date,
+) -> pd.DataFrame:
+    """Keep rows whose ``Date_opération`` falls in [period_start, period_end] inclusive."""
+    date_col = get_ci_column(df, "Date_opération")
+    if not date_col:
+        raise ValueError("Date_opération column missing.")
+    mask = df[date_col].apply(lambda d: date_in_range(d, period_start, period_end))
+    return df.loc[mask].copy()
+
+
+def compute_section1_cdp(
+    df: pd.DataFrame,
+    *,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
     cdp_col = get_ci_column(df, "CDP")
     client_col = get_ci_column(df, "CLIENT_ID")
     confirme_col = get_ci_column(df, "CONFIRME")
@@ -31,18 +51,39 @@ def compute_section1_cdp(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, floa
     if not (cdp_col and client_col and confirme_col and pdv_col):
         raise ValueError("Missing required columns for Section 1 (CDP, CLIENT_ID, CONFIRME, PDV_DEVIS).")
 
-    df = _prep_client_df(df)
-    df[pdv_col] = df[pdv_col].fillna(0.0)
+    work = _prep_client_df(df)
+    if period_start is not None and period_end is not None:
+        work = filter_rows_by_date_operation(work, period_start, period_end)
+    work[pdv_col] = work[pdv_col].fillna(0.0)
 
-    total_clients = df.groupby(cdp_col)[client_col].nunique()
-    conf_clients = df[df[confirme_col].map(is_confirmed_exact)].groupby(cdp_col)[client_col].nunique()
-    encours_clients = df[df[confirme_col].map(is_en_cours)].groupby(cdp_col)[client_col].nunique()
-    annule_clients = df[df[confirme_col].map(is_cancelled_status)].groupby(cdp_col)[client_col].nunique()
+    if work.empty:
+        return (
+            pd.DataFrame(
+                columns=[
+                    "CDP",
+                    "Clients_uniques",
+                    "Clients_confirmes",
+                    "Clients_en_cours",
+                    "Clients_annules",
+                    "Taux_confirmation",
+                    "PDV_total",
+                    "PDV_confirme",
+                    "PDV_median_client",
+                    "PDV_moyen_client",
+                ]
+            ),
+            {"confirmed_le_total": 1.0, "rates_valid": 1.0},
+        )
 
-    pdv_total = df.groupby(cdp_col)[pdv_col].sum()
-    pdv_confirmed = df[df[confirme_col].map(is_confirmed_exact)].groupby(cdp_col)[pdv_col].sum()
+    total_clients = work.groupby(cdp_col)[client_col].nunique()
+    conf_clients = work[work[confirme_col].map(is_confirmed_exact)].groupby(cdp_col)[client_col].nunique()
+    encours_clients = work[work[confirme_col].map(is_en_cours)].groupby(cdp_col)[client_col].nunique()
+    annule_clients = work[work[confirme_col].map(is_cancelled_status)].groupby(cdp_col)[client_col].nunique()
 
-    client_pdv = df.groupby([cdp_col, client_col])[pdv_col].sum().reset_index()
+    pdv_total = work.groupby(cdp_col)[pdv_col].sum()
+    pdv_confirmed = work[work[confirme_col].map(is_confirmed_exact)].groupby(cdp_col)[pdv_col].sum()
+
+    client_pdv = work.groupby([cdp_col, client_col])[pdv_col].sum().reset_index()
     pdv_median = client_pdv.groupby(cdp_col)[pdv_col].median()
     pdv_mean = client_pdv.groupby(cdp_col)[pdv_col].mean()
 
@@ -70,23 +111,34 @@ def compute_section1_cdp(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, floa
 def compute_cdp_margin_pct_averages(
     marge_df: pd.DataFrame,
     *,
+    period_start: Optional[date] = None,
+    period_end: Optional[date] = None,
     max_cdp: int = 8,
 ) -> pd.DataFrame:
     """
     Per CDP: simple mean of row-level margin % = 100 × margin_eur / PDV_DEVIS.
     Budget = MARGE_EVENTS_FINAL_BUDGET; réelle = MARGE_EVENTS_REELLE (before site commission).
     """
+    empty = pd.DataFrame(
+        columns=[
+            "CDP",
+            "Marge_budget_pct_moyenne",
+            "Marge_reelle_pct_moyenne",
+            "N_lignes",
+        ]
+    )
     if marge_df.empty:
-        return pd.DataFrame(
-            columns=[
-                "CDP",
-                "Marge_budget_pct_moyenne",
-                "Marge_reelle_pct_moyenne",
-                "N_lignes",
-            ]
-        )
+        return empty
 
     sub = marge_df.copy()
+    if period_start is not None and period_end is not None:
+        if "Date_opération" not in sub.columns:
+            raise ValueError("Date_opération column missing on Marge_Reelle_Devis.")
+        mask = sub["Date_opération"].apply(lambda d: date_in_range(d, period_start, period_end))
+        sub = sub.loc[mask].copy()
+    if sub.empty:
+        return empty
+
     pdv = sub["PDV_DEVIS"].astype(float)
     sub["_budget_pct"] = 100.0 * sub["MARGE_EVENTS_FINAL_BUDGET"].fillna(0) / pdv
     sub["_reelle_pct"] = 100.0 * sub["MARGE_EVENTS_REELLE"].fillna(0) / pdv

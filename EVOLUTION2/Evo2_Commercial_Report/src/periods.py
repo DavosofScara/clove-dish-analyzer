@@ -1,15 +1,22 @@
 """
 Season and weekly windows for the Evolution2 weekly automation report.
 
+Fiscal calendar (aligned with Evolution2 fiscal year):
 - Week: Monday → Sunday (completed week when the report runs on Monday).
-- HIVER: 15 November → 30 April (spans two calendar years).
-- ÉTÉ: 1 May → 14 November.
+- HIVER: 1 October → 30 April (spans two calendar years).
+- ÉTÉ: 1 May → 30 September.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Tuple
+
+# Fiscal season bounds (inclusive)
+ETE_START_MONTH, ETE_START_DAY = 5, 1
+ETE_END_MONTH, ETE_END_DAY = 9, 30
+HIVER_START_MONTH, HIVER_START_DAY = 10, 1
+HIVER_END_MONTH, HIVER_END_DAY = 4, 30
 
 
 @dataclass(frozen=True)
@@ -19,6 +26,19 @@ class SeasonPeriod:
     start: date
     end: date
     label: str
+
+
+def ete_bounds(year: int) -> tuple[date, date]:
+    """ÉTÉ fiscal season for calendar year ``year`` (May 1 – Sep 30)."""
+    return date(year, ETE_START_MONTH, ETE_START_DAY), date(year, ETE_END_MONTH, ETE_END_DAY)
+
+
+def hiver_bounds(start_year: int) -> tuple[date, date]:
+    """HIVER fiscal season starting October ``start_year`` (Oct 1 – Apr 30)."""
+    return (
+        date(start_year, HIVER_START_MONTH, HIVER_START_DAY),
+        date(start_year + 1, HIVER_END_MONTH, HIVER_END_DAY),
+    )
 
 
 def previous_completed_week(as_of: date) -> Tuple[date, date]:
@@ -42,43 +62,39 @@ def previous_completed_week(as_of: date) -> Tuple[date, date]:
 
 def season_containing(d: date) -> SeasonPeriod:
     """
-    Season that contains calendar date `d`.
+    Fiscal season that contains calendar date ``d``.
 
     Examples:
-    - 17 Nov 2025 → HIVER 25/26 (15 Nov 2025 – 30 Apr 2026)
-    - 3 May 2026 → ÉTÉ 26 (1 May 2026 – 14 Nov 2026)
+    - 17 Nov 2025 → HIVER 25/26 (1 Oct 2025 – 30 Apr 2026)
+    - 3 May 2026 → ÉTÉ 26 (1 May 2026 – 30 Sep 2026)
+    - 15 Oct 2026 → HIVER 26/27 (1 Oct 2026 – 30 Apr 2027)
     """
-    m, day = d.month, d.day
+    m = d.month
     yy = lambda y: str(y)[-2:]
 
-    if (m == 11 and day >= 15) or m == 12:
-        start = date(d.year, 11, 15)
-        end = date(d.year + 1, 4, 30)
+    if ETE_START_MONTH <= m <= ETE_END_MONTH:
+        start, end = ete_bounds(d.year)
+        return SeasonPeriod(start, end, f"ÉTÉ {yy(d.year)}")
+    if m >= HIVER_START_MONTH:
+        start, end = hiver_bounds(d.year)
         return SeasonPeriod(start, end, f"HIVER {yy(d.year)}/{yy(d.year + 1)}")
-    if m < 5 or (m == 4 and day <= 30):
-        start = date(d.year - 1, 11, 15)
-        end = date(d.year, 4, 30)
-        return SeasonPeriod(start, end, f"HIVER {yy(d.year - 1)}/{yy(d.year)}")
-    start = date(d.year, 5, 1)
-    end = date(d.year, 11, 14)
-    return SeasonPeriod(start, end, f"ÉTÉ {yy(d.year)}")
+    start, end = hiver_bounds(d.year - 1)
+    return SeasonPeriod(start, end, f"HIVER {yy(d.year - 1)}/{yy(d.year)}")
 
 
 def next_season_after(current: SeasonPeriod) -> SeasonPeriod:
     """
-    Season immediately following `current` (no gap between seasons).
+    Season immediately following ``current``.
 
     HIVER 25/26 → ÉTÉ 26; ÉTÉ 26 → HIVER 26/27.
     """
     yy = lambda y: str(y)[-2:]
     if current.label.startswith("HIVER"):
         y = current.end.year
-        start = date(y, 5, 1)
-        end = date(y, 11, 14)
+        start, end = ete_bounds(y)
         return SeasonPeriod(start, end, f"ÉTÉ {yy(y)}")
     y = current.end.year
-    start = date(y, 11, 15)
-    end = date(y + 1, 4, 30)
+    start, end = hiver_bounds(y)
     return SeasonPeriod(start, end, f"HIVER {yy(y)}/{yy(y + 1)}")
 
 
@@ -91,13 +107,34 @@ def previous_season_before(current: SeasonPeriod) -> SeasonPeriod:
     yy = lambda y: str(y)[-2:]
     if current.label.startswith("HIVER"):
         y0 = current.start.year
-        start = date(y0 - 1, 11, 15)
-        end = date(y0, 4, 30)
+        start, end = hiver_bounds(y0 - 1)
         return SeasonPeriod(start, end, f"HIVER {yy(y0 - 1)}/{yy(y0)}")
     y0 = current.start.year
-    start = date(y0 - 1, 5, 1)
-    end = date(y0 - 1, 11, 14)
+    start, end = ete_bounds(y0 - 1)
     return SeasonPeriod(start, end, f"ÉTÉ {yy(y0 - 1)}")
+
+
+def fiscal_year_bounds(start_year: int) -> tuple[date, date]:
+    """Fiscal year starting 1 October ``start_year`` through 30 September ``start_year + 1``."""
+    return date(start_year, HIVER_START_MONTH, HIVER_START_DAY), date(
+        start_year + 1, ETE_END_MONTH, ETE_END_DAY
+    )
+
+
+def fiscal_year_containing(d: date) -> SeasonPeriod:
+    """
+    Fiscal year (année en cours) containing calendar date ``d`` (1 Oct – 30 Sep).
+
+    Examples:
+    - 6 Jul 2026 → Année 25/26 (1 Oct 2025 – 30 Sep 2026)
+    - 12 Oct 2026 → Année 26/27 (1 Oct 2026 – 30 Sep 2027)
+    """
+    yy = lambda y: str(y)[-2:]
+    if d.month >= HIVER_START_MONTH:
+        start, end = fiscal_year_bounds(d.year)
+        return SeasonPeriod(start, end, f"Année {yy(d.year)}/{yy(d.year + 1)}")
+    start, end = fiscal_year_bounds(d.year - 1)
+    return SeasonPeriod(start, end, f"Année {yy(d.year - 1)}/{yy(d.year)}")
 
 
 def season_window_for_metrics(season: SeasonPeriod, as_of: date) -> Tuple[date, date]:

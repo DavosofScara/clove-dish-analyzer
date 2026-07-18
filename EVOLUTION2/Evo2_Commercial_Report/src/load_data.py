@@ -186,8 +186,10 @@ def load_marge_reelle_devis() -> pd.DataFrame:
         "MARGE_EVENTS_FINAL_BUDGET": _resolve_column(
             df, "MARGE_EVENTS_FINAL_BUDGET", "MARGE EVENTS FINAL BUDGET"
         ),
+        "Date_opération": _resolve_column(df, "Date_opération", "DATE_OPERATION"),
     }
-    missing = [k for k, v in column_map.items() if not v]
+    required_keys = ["CDP", "PDV_DEVIS", "MARGE_EVENTS_REELLE", "MARGE_EVENTS_FINAL_BUDGET"]
+    missing = [k for k in required_keys if not column_map.get(k)]
     if missing:
         cols = ", ".join(str(c) for c in df.columns)
         raise ValueError(
@@ -195,12 +197,22 @@ def load_marge_reelle_devis() -> pd.DataFrame:
             f"Found: {cols}"
         )
 
-    out = df[[column_map[k] for k in column_map]].copy()
-    out.columns = list(column_map.keys())
+    out = df[[column_map[k] for k in required_keys]].copy()
+    out.columns = required_keys
 
     out["CDP"] = normalize_str_series(out["CDP"])
     for col in ("PDV_DEVIS", "MARGE_EVENTS_REELLE", "MARGE_EVENTS_FINAL_BUDGET"):
         out[col] = out[col].apply(coerce_number)
+
+    date_src = column_map.get("Date_opération")
+    if date_src:
+        out["Date_opération"] = pd.to_datetime(df[date_src], errors="coerce", dayfirst=True)
+    else:
+        logger.warning(
+            "Date_opération column missing on %s; period filters for margin charts will fail",
+            MARGE_REELLE_SHEET_NAME,
+        )
+        out["Date_opération"] = pd.NaT
 
     valide_col = _resolve_column(df, "ALL_LINES_VALIDE", "ALL LINES VALIDE")
     before_valide = len(out)

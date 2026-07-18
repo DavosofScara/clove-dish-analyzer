@@ -33,8 +33,8 @@ DOSSIERS_TB_ROOT = Path(
 )
 
 ETE_2025_START = date(2025, 5, 1)
-ETE_2025_END = date(2025, 11, 15)
-ETE_2025_EXPORT_END = date(2025, 11, 14)
+ETE_2025_END = date(2025, 9, 30)
+ETE_2025_EXPORT_END = date(2025, 9, 30)
 DOSSIER_TRAVAIL_MASTER_CSV = HISTORICAL_DATA_DIR / "dossier_travail_master.csv"
 DOSSIER_TB_PRE_V13_CSV = HISTORICAL_DATA_DIR / "dossier_tb_pre_v13.csv"
 ETE_2025_DEFINITIVE_CSV = HISTORICAL_DATA_DIR / "ete_2025_definitive.csv"
@@ -78,7 +78,7 @@ CC_EMAILS = parse_recipient_list(os.getenv("CC_EMAILS", "") or os.getenv("CC_EMA
 EXCEL_PATH = Path(
     "/Users/davidcraig/Evolution2 Events Dropbox/"
     "djacraig@hotmail.com/DOSSIERS_TB/ALL_DOSSIERS_CA_2025/REPORTS/"
-    "Evolution2_Report_V13.xlsm"
+    "Evolution2_Report_V14_test.xlsm"
 )
 EXCEL_SHEET_NAME = "extract_devis"
 MARGE_REELLE_SHEET_NAME = os.getenv("MARGE_REELLE_SHEET_NAME", "Marge_Reelle_Devis")

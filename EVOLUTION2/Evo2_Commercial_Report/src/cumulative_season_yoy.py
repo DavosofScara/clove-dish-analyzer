@@ -34,6 +34,10 @@ from .status_norm import is_confirmed_exact
 
 logger = logging.getLogger(__name__)
 
+# Full-season booked curve (3rd line): faint dashed green, distinct from report-to-date solid line.
+FULL_SEASON_LINE_ALPHA = 0.48
+FULL_SEASON_LINE_COLOR = CLOVE_GREEN
+
 
 def _pdv_confirme(val) -> float:
     v = coerce_number(val)
@@ -123,7 +127,7 @@ def _align_prior_dates_to_current_season_window(
     within the current season (day 0 = opening day of each season).
 
     YoY curves then share one x-axis: the current season calendar only
-    (e.g. HIVER 25/26 → 15/11/2025 … 30/04/2026), instead of stretching from 2024 to 2026.
+    (e.g. HIVER 25/26 → 01/10/2025 … 30/04/2026), instead of stretching from 2024 to 2026.
     """
     return [current_start + (d - prior_start) for d in prior_dates]
 
@@ -202,6 +206,9 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
 
     cap = min(as_of, current.end)
     d_cur, y_cur_raw = cumulative_series_by_calendar_date(daily_current, current.start, current.end, cap)
+    d_cur_full, y_cur_full_raw = cumulative_series_by_calendar_date(
+        daily_current, current.start, current.end, current.end
+    )
     d_pri, y_pri_raw = cumulative_series_by_calendar_date(daily_prior, prior.start, prior.end, prior.end)
     d_pri_on_current_axis = _align_prior_dates_to_current_season_window(
         d_pri,
@@ -226,7 +233,20 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
             color=prior_line_color,
             linewidth=1.35,
             solid_capstyle="round",
-            label=f"Saison précédente ({prior.label})",
+            label=f"N-1 ({prior.label}) — saison entière",
+            zorder=3,
+        )
+    if len(d_cur_full) and len(y_cur_full_raw):
+        x_full_s, y_full_s = _smooth_monotonic_curve(d_cur_full, y_cur_full_raw)
+        ax.plot(
+            x_full_s,
+            y_full_s,
+            color=FULL_SEASON_LINE_COLOR,
+            alpha=FULL_SEASON_LINE_ALPHA,
+            linewidth=1.2,
+            linestyle="-",
+            solid_capstyle="round",
+            label=f"Confirmé saison entière ({current.label})",
             zorder=3,
         )
     if len(d_cur) and len(y_cur_raw):
@@ -238,11 +258,11 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
             color=CLOVE_GREEN,
             linewidth=2.6,
             solid_capstyle="round",
-            label=f"Saison en cours ({current.label})",
+            label=f"Réalisé à date du rapport ({current.label})",
             zorder=4,
         )
 
-    if not (y_pri_raw or y_cur_raw):
+    if not (y_pri_raw or y_cur_raw or y_cur_full_raw):
         ax.text(0.5, 0.5, "Aucune donnée", ha="center", va="center", color=THEME_TEXT, fontsize=12)
 
     ax.xaxis_date()
@@ -259,7 +279,7 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
     ax.set_ylabel("CA réalisé cumulé HT (€)", color=THEME_TEXT, fontsize=10)
     ax.set_title(
         f"CA cumulé confirmé — {current.label} vs {prior.label}\n"
-        f"(Date opération · arrêt saison en cours : {cap.strftime('%d/%m/%Y')})",
+        f"(Date opération · ligne épaisse arrêtée au {cap.strftime('%d/%m/%Y')})",
         color=THEME_TEXT,
         fontsize=11,
         pad=12,
@@ -284,7 +304,9 @@ def _make_cumulative_season_yoy_figure(df: pd.DataFrame, as_of: date) -> Figure:
     fig.text(
         0.5,
         0.02,
-        "CA = somme PDV devis confirmés (HT), CONFIRMÉ · N-1 alignée sur le même calendrier (même jour relatif dans la saison)",
+        "Ligne épaisse = réalisé (événements déjà datés) à la date du rapport · "
+        "ligne fine = confirmé sur toute la saison (y compris dates futures dans l’extract) · "
+        "N-1 alignée sur le même calendrier relatif",
         ha="center",
         fontsize=8,
         color=THEME_MUTED,

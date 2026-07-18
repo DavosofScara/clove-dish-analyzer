@@ -216,13 +216,81 @@ def _kpi_ca_rows(kpi: WeeklyKpiResult) -> str:
     return _kpi_metric_table(rows)
 
 
+def _cdp_conversion_section_html(
+    *,
+    section_id: str,
+    scope_label: str,
+    period_label: str,
+    cdp_tbody: str,
+    chart_scatter_uri: str,
+    chart_margin_uri: str,
+) -> str:
+    return f"""
+          <tr>
+            <td style="padding-top:4px;padding-bottom:8px;">
+              <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">
+                {section_id}. Conversion par CDP — {scope_label}
+              </div>
+              <div style="color:{THEME_MUTED};font-size:12px;margin-bottom:8px;">
+                {period_label}
+              </div>
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+                Tableau conversion par CDP — {scope_label}
+              </div>
+              <table width="100%" cellspacing="0" cellpadding="0" style="border-radius:10px;background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-collapse:collapse;">
+                <thead>
+                  <tr>
+                    <th align="left" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">CDP</th>
+                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">Clients</th>
+                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">Taux conf.</th>
+                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">PDV conf.</th>
+                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">PDV médian</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cdp_tbody}
+                </tbody>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:6px;padding-bottom:14px;">
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+                Conversion vs valeur par CDP — {scope_label}
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_scatter_uri}" alt="Conversion vs valeur par CDP — {scope_label}" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:6px;padding-bottom:18px;">
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
+                Marge budget vs réelle par CDP — {scope_label}
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_margin_uri}" alt="Marge budget vs réelle par CDP — {scope_label}" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>"""
+
+
 def build_weekly_email_html(
     clove_logo_path: Path | None,
     evo2_logo_path: Path | None,
     kpi: WeeklyKpiResult,
-    cdp_section_rows: List[List[Tuple[str, Optional[float]]]],
-    chart_scatter_uri: str,
-    chart_margin_uri: str,
+    cdp_season_rows: List[List[Tuple[str, Optional[float]]]],
+    cdp_season_period_label: str,
+    chart_scatter_season_uri: str,
+    chart_margin_season_uri: str,
+    cdp_year_rows: List[List[Tuple[str, Optional[float]]]],
+    cdp_year_period_label: str,
+    fiscal_year_start: str,
+    fiscal_year_end: str,
+    chart_scatter_year_uri: str,
+    chart_margin_year_uri: str,
     chart_cumulative_yoy_uri: str,
     chart_site_bars_uri: str,
     site_chart_period_label: str,
@@ -247,7 +315,24 @@ def build_weekly_email_html(
 
     dossier_cards_html = build_dossier_kpi_cards_html(kpi, week_range_label)
     ca_table = _kpi_ca_rows(kpi)
-    cdp_tbody = _table_rows(cdp_section_rows)
+    cdp_season_tbody = _table_rows(cdp_season_rows)
+    cdp_year_tbody = _table_rows(cdp_year_rows)
+    cdp_season_html = _cdp_conversion_section_html(
+        section_id="3.1",
+        scope_label="Saison en cours",
+        period_label=cdp_season_period_label,
+        cdp_tbody=cdp_season_tbody,
+        chart_scatter_uri=chart_scatter_season_uri,
+        chart_margin_uri=chart_margin_season_uri,
+    )
+    cdp_year_html = _cdp_conversion_section_html(
+        section_id="3.2",
+        scope_label="Année en cours",
+        period_label=cdp_year_period_label,
+        cdp_tbody=cdp_year_tbody,
+        chart_scatter_uri=chart_scatter_year_uri,
+        chart_margin_uri=chart_margin_year_uri,
+    )
 
     proposed_season_start = kpi.current_season.start.strftime("%d/%m/%Y")
     proposed_season_end = kpi.current_season.end.strftime("%d/%m/%Y")
@@ -265,7 +350,7 @@ def build_weekly_email_html(
 
                   <strong>Semaine de référence.</strong> Lundi–dimanche, celle qui se termine au <strong>dernier dimanche ≤ date du rapport</strong> (un lundi matin = dimanche d’hier ; un dimanche = ce même dimanche, pas la semaine d’avant).<br/><br/>
 
-                  <strong>Saisons (calendrier).</strong> HIVER : 15/11–30/04. ÉTÉ : 01/05–14/11.<br/><br/>
+                  <strong>Saisons (calendrier fiscal).</strong> HIVER : 01/10–30/04. ÉTÉ : 01/05–30/09.<br/><br/>
 
                   <strong>1. Dossiers.</strong> Un dossier = un <code>CLIENT_ID</code> distinct.
                   <em>Réalisés (saison)</em> : confirmés, <code>Date_opération</code> du début de saison au <strong>min(date du rapport, fin de saison)</strong> ({sm_start} – {sm_end} pour ce rapport).
@@ -279,14 +364,19 @@ def build_weekly_email_html(
                   <em>CA prévisionnel (En cours)</em> — ligne « {kpi.current_season.label} (En cours) » : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière).
                   <strong>(2)</strong> + complément pipeline : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients.
                   <em>CA prévisionnel (saison suivante)</em> — ligne « {kpi.next_season.label} (saison suivante) » : mêmes règles sur ({next_season_start} – {next_season_end}).
-                  <em>Coupe des dates</em> : le CA prévisionnel utilise le <strong>dimanche de fin de semaine de référence</strong> ({week_end_label}) pour la fenêtre EN COURS ; le graphique « PDV par site » (saison en cours), les dossiers réalisés (saison) et la courbe CA cumulée utilisent la <strong>date du rapport</strong> ({report_date_label}) — ces deux dates peuvent différer si le rapport est produit en milieu de semaine.<br/><br/>
+                  <em>Coupe des dates</em> : le CA prévisionnel utilise le <strong>dimanche de fin de semaine de référence</strong> ({week_end_label}) pour la fenêtre EN COURS ; les dossiers réalisés (saison) et la <strong>ligne épaisse</strong> du graphique CA cumulé utilisent la <strong>date du rapport</strong> ({report_date_label}) — ces deux dates peuvent différer si le rapport est produit en milieu de semaine.<br/><br/>
 
-                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Courbes = <strong>CA réalisé HT</strong> cumulé jour par jour : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes <strong>CONFIRMÉ</strong>, agrégée par date de <code>Date_opération</code>. L’axe des abscisses est le calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}) ; la saison <strong>N-1</strong> de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ) est <strong>alignée</strong> sur ce calendrier (même jour relatif dans la saison) pour la comparaison visuelle. La courbe <em>saison en cours</em> s’arrête au <strong>{report_date_label}</strong> (date du rapport, plafonnée à la fin de saison) — elle correspond donc au cumul des opérations <strong>déjà datées</strong> jusqu’à cette date, et <strong>non</strong> au montant de la ligne du tableau « CA confirmé (saison en cours) », qui inclut toute la saison calendaire jusqu’au {proposed_season_end} (y compris les <code>Date_opération</code> futures dans l’extract). La courbe <em>N-1</em> couvre la <strong>saison précédente entière</strong> (jusqu’à sa fin calendaire). Pour <strong>ÉTÉ 25</strong>, la ligne N-1 provient du fichier historique consolidé <code>ete_2025_definitive.csv</code> (DOSSIER TRAVAIL recap + dossiers TB pré-V13), pas seulement de V13 ; les autres saisons N-1 restent sur l’extract V13.<br/><br/>
+                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Trois courbes, toutes en <strong>CA confirmé HT</strong> cumulé par <code>Date_opération</code> (<code>PDV_DEVIS_CONFIRME</code>, CONFIRMÉ). Axe = calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <strong>Ligne épaisse (vert)</strong> — <em>réalisé à date du rapport</em> ({report_date_label}) : événements déjà datés jusqu’à cette date (aligné avec les dossiers réalisés saison).
+                  <strong>Ligne fine (vert clair)</strong> — <em>confirmé saison entière</em> : même base que la ligne du tableau « CA confirmé (saison en cours) » ({proposed_season_start} – {proposed_season_end}, y compris <code>Date_opération</code> futures dans l’extract).
+                  <strong>Ligne grise</strong> — N-1 de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ), saison précédente entière, <strong>alignée</strong> sur le calendrier relatif de la saison en cours. Pour <strong>ÉTÉ 25</strong>, N-1 provient de <code>ete_2025_definitive.csv</code> ; les autres saisons N-1 restent sur l’extract V13.<br/><br/>
 
-                  <strong>3. Conversion CDP.</strong> Le tableau et le nuage portent sur <strong>toutes les lignes de l’extract</strong> (toutes périodes, toutes dates d’opération) — pas limités à la semaine de référence ni à la saison en cours. Par CDP : clients uniques, taux de confirmation, somme <code>PDV_DEVIS</code> sur lignes confirmées (colonne « PDV conf. »), PDV médian par client ; le nuage utilise les mêmes agrégats (X = taux, Y = médian, surface des bulles ∝ PDV confirmé du CDP).
-                  <strong>Graphique marge budget vs réelle</strong> : feuille <code>Marge_Reelle_Devis</code> (lignes <code>ALL_LINES_VALIDE = True</code>) ; par CDP, <strong>moyenne simple</strong> de <code>100 × marge € ÷ PDV_DEVIS</code> — budget = <code>MARGE_EVENTS_FINAL_BUDGET</code>, réelle = <code>MARGE_EVENTS_REELLE</code> (marge avant commission partenaire site EVO2).<br/><br/>
+                  <strong>3. Conversion CDP.</strong> Même métriques pour 3.1 et 3.2 : lignes de l’extract filtrées par <code>Date_opération</code> dans la période indiquée ; par CDP (top 8 par PDV confirmé) : clients uniques, taux de confirmation, somme <code>PDV_DEVIS</code> sur lignes confirmées (« PDV conf. »), PDV médian par client ; le nuage (X = taux, Y = médian, surface ∝ PDV confirmé) reprend ces agrégats.
+                  <strong>3.1 — Saison en cours</strong> : <code>Date_opération</code> sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <strong>3.2 — Année en cours</strong> : <code>Date_opération</code> sur l’<strong>année fiscale complète</strong> 01/10–30/09 ({fiscal_year_start} – {fiscal_year_end}).
+                  <strong>Graphique marge budget vs réelle</strong> (3.1 et 3.2) : feuille <code>Marge_Reelle_Devis</code> (lignes <code>ALL_LINES_VALIDE = True</code>, filtrées par <code>Date_opération</code> sur la même période) ; par CDP, <strong>moyenne simple</strong> de <code>100 × marge € ÷ PDV_DEVIS</code> — budget = <code>MARGE_EVENTS_FINAL_BUDGET</code>, réelle = <code>MARGE_EVENTS_REELLE</code> (marge avant commission partenaire site EVO2). Les graphiques 3.2 utilisent le même vert avec une légère transparence pour les distinguer de 3.1.<br/><br/>
 
-                  <strong>4. PDV par site.</strong> Somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées, regroupée par la colonne <code>SITE</code> de l’extract (<strong>pas</strong> <code>SITE_EVOLUTION</code>, <code>SITE_EVO2</code> ni CDP). <em>Saison en cours</em> : confirmés, <code>Date_opération</code> du début de saison à la <strong>date du rapport</strong> ({sm_start} – {sm_end} ; même fenêtre que la légende sous le graphique). <em>Saison suivante</em> : toute la saison suivante ({next_season_start} – {next_season_end}).
+                  <strong>4. PDV par site.</strong> Somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées, regroupée par la colonne <code>SITE</code> de l’extract (<strong>pas</strong> <code>SITE_EVOLUTION</code>, <code>SITE_EVO2</code> ni CDP). <em>Saison en cours</em> : confirmés, <code>Date_opération</code> sur toute la <strong>saison calendaire</strong> ({proposed_season_start} – {proposed_season_end} ; même fenêtre que la légende sous le graphique). <em>Saison suivante</em> : toute la saison suivante ({next_season_start} – {next_season_end}).
                 </div>
 """
 
@@ -342,7 +432,7 @@ def build_weekly_email_html(
                   {ca_table}
               </table>
               <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-top:14px;margin-bottom:6px;">
-                CA réalisé cumulé — saison en cours vs N-1 (même type)
+                CA réalisé cumulé — réalisé vs confirmé (saison) vs N-1
               </div>
               <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
                 <img src="{chart_cumulative_yoy_uri}" alt="CA cumulé confirmé — comparaison saison" style="max-width:100%;height:auto;border-radius:6px;" />
@@ -350,49 +440,9 @@ def build_weekly_email_html(
             </td>
           </tr>
 
-          <tr>
-            <td style="padding-top:4px;padding-bottom:16px;">
-              <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">
-                3. Conversion par CDP
-              </div>
-              <table width="100%" cellspacing="0" cellpadding="0" style="border-radius:10px;background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-collapse:collapse;">
-                <thead>
-                  <tr>
-                    <th align="left" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">CDP</th>
-                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">Clients</th>
-                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">Taux conf.</th>
-                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">PDV conf.</th>
-                    <th align="right" style="padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:{THEME_MUTED};font-size:12px;font-weight:500;">PDV médian</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cdp_tbody}
-                </tbody>
-              </table>
-            </td>
-          </tr>
+          {cdp_season_html}
 
-          <tr>
-            <td style="padding-top:6px;padding-bottom:18px;">
-              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
-                Conversion vs valeur par CDP
-              </div>
-              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
-                <img src="{chart_scatter_uri}" alt="Conversion vs Valeur par CDP" style="max-width:100%;height:auto;border-radius:6px;" />
-              </div>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding-top:6px;padding-bottom:18px;">
-              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">
-                Marge budget vs réelle par CDP
-              </div>
-              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
-                <img src="{chart_margin_uri}" alt="Marge budget vs réelle par CDP" style="max-width:100%;height:auto;border-radius:6px;" />
-              </div>
-            </td>
-          </tr>
+          {cdp_year_html}
 
           <tr>
             <td style="padding-top:4px;padding-bottom:12px;">

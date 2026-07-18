@@ -50,7 +50,7 @@ def _ete_confirmed_recap(recap: pd.DataFrame) -> pd.DataFrame:
     mask = (
         raw["_conf"]
         & raw["_date"].notna()
-        & raw["_date"].between("2025-05-01", "2025-11-15")
+        & raw["_date"].between("2025-05-01", "2025-09-30")
         & (raw["_amt"] > 0)
     )
     return raw.loc[mask].copy()
