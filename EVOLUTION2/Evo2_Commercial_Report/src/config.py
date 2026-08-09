@@ -78,7 +78,7 @@ CC_EMAILS = parse_recipient_list(os.getenv("CC_EMAILS", "") or os.getenv("CC_EMA
 EXCEL_PATH = Path(
     "/Users/davidcraig/Evolution2 Events Dropbox/"
     "djacraig@hotmail.com/DOSSIERS_TB/ALL_DOSSIERS_CA_2025/REPORTS/"
-    "Evolution2_Report_V14_test.xlsm"
+    "Evolution2_Report_V14.xlsm"
 )
 EXCEL_SHEET_NAME = "extract_devis"
 MARGE_REELLE_SHEET_NAME = os.getenv("MARGE_REELLE_SHEET_NAME", "Marge_Reelle_Devis")
