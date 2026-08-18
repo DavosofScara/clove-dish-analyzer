@@ -83,6 +83,13 @@ def _monday_of_week(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+def _normalize_report_end_date(d: date) -> date:
+    """Weekly reports end Sunday; Monday (incl. early-morning) belongs to the next week."""
+    if d.weekday() == 0:
+        return d - timedelta(days=1)
+    return d
+
+
 def determine_week_context(ledger: pd.DataFrame, week_arg: Optional[str]) -> WeeklyContext:
     """Determine the current and previous week windows."""
     if week_arg:
@@ -92,10 +99,11 @@ def determine_week_context(ledger: pd.DataFrame, week_arg: Optional[str]) -> Wee
         # Use max transaction_date in ledger as reference
         ref_date = pd.to_datetime(ledger["transaction_date"]).dt.date.max()
 
-    week_start = _monday_of_week(ref_date)
+    report_date = _normalize_report_end_date(ref_date)
+    week_start = _monday_of_week(report_date)
     prev_week_start = week_start - timedelta(days=7)
     label = week_start.strftime("%Y-%m-%d")
-    return WeeklyContext(week_start=week_start, prev_week_start=prev_week_start, report_date=ref_date, label=label)
+    return WeeklyContext(week_start=week_start, prev_week_start=prev_week_start, report_date=report_date, label=label)
 
 
 def load_ledger() -> pd.DataFrame:
@@ -996,6 +1004,48 @@ def make_weekly_sales_chart(daily: pd.DataFrame, ctx: WeeklyContext, out_dir: Pa
     return chart_path
 
 
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+def _relative_luminance(hex_color: str) -> float:
+    r, g, b = _hex_to_rgb(hex_color)
+
+    def _linear(channel: int) -> float:
+        c = channel / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * _linear(r) + 0.7152 * _linear(g) + 0.0722 * _linear(b)
+
+
+def _interpolate_scale_color(t: float, scale: list[str]) -> str:
+    t = max(0.0, min(1.0, t))
+    if len(scale) == 1:
+        return scale[0]
+    segments = len(scale) - 1
+    pos = t * segments
+    idx = min(int(pos), segments - 1)
+    frac = pos - idx
+    c0, c1 = _hex_to_rgb(scale[idx]), _hex_to_rgb(scale[idx + 1])
+    rgb = tuple(int(round(a + (b - a) * frac)) for a, b in zip(c0, c1))
+    return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+
+def _text_color_for_bar_fill(fill_hex: str, threshold: float = 0.75) -> str:
+    """White text on dark/grey fills; black only on very pale or bright colours."""
+    return "#FFFFFF" if _relative_luminance(fill_hex) < threshold else "#000000"
+
+
+def _bar_label_colors(values: pd.Series, scale: list[str]) -> list[str]:
+    vmin, vmax = float(values.min()), float(values.max())
+    colors: list[str] = []
+    for value in values:
+        t = (float(value) - vmin) / (vmax - vmin) if vmax > vmin else 0.0
+        colors.append(_text_color_for_bar_fill(_interpolate_scale_color(t, scale)))
+    return colors
+
+
 def make_top_products_chart(ledger: pd.DataFrame, ctx: WeeklyContext, out_dir: Path) -> Optional[Path]:
     week = filter_week(ledger, ctx, "transaction_date")
     if week.empty:
@@ -1084,13 +1134,9 @@ def make_top_products_chart(ledger: pd.DataFrame, ctx: WeeklyContext, out_dir: P
         bargap=0.2,
         margin=dict(r=80, l=10, t=60, b=40),  # Extra right margin for text labels
     )
-    # Choose text colour based on bar rank:
-    # - Top 3 bars: keep white text for maximum contrast on darker colours
-    # - Bars 4–10: use black text to stay readable on the paler colours
-    text_colors = [
-        "#FFFFFF" if i < 3 else "#000000"
-        for i in range(len(top))
-    ]
+    # White on grey/black bars; black only on very pale / yellow fills
+    revenue_color_scale = ["#EBFB71", "#F5F5F5", "#000000"]
+    text_colors = _bar_label_colors(top["net_revenue"], revenue_color_scale)
 
     fig.update_traces(
         marker=dict(
@@ -1171,15 +1217,10 @@ def make_top_products_by_items_chart(ledger: pd.DataFrame, ctx: WeeklyContext, o
         margin=dict(r=80, l=10, t=60, b=40),  # Extra right margin for text labels
     )
     
-    # Choose text colour based on bar rank:
-    # - Top 3 bars: keep white text for maximum contrast on darker colours
-    # - Bars 4–9: use black text to stay readable on the paler colours
-    # - Bar 10 (index 9): use white text since the bar is black
-    text_colors = [
-        "#FFFFFF" if i < 3 or i == len(current_qty) - 1 else "#000000"
-        for i in range(len(current_qty))
-    ]
-    
+    # Label colour follows each bar's fill (white on dark grey/black, black on pale/orange)
+    items_color_scale = ["#000000", "#F5F5F5", "#FF6B35"]
+    text_colors = _bar_label_colors(current_qty["quantity"], items_color_scale)
+
     fig.update_traces(
         marker=dict(
             line=dict(width=2, color="#000000"),  # Brand black borders
@@ -1318,8 +1359,8 @@ def build_html_report(
             f'<a href="{master_link}" '
             f'style="display:inline-block;padding:8px 14px;'
             f'border-radius:999px;border:1px solid #16A34A;'
-            f'color:#BBF7D0;text-decoration:none;font-size:13px;'
-            f'background-color:transparent;">'
+            f'color:#000000;text-decoration:none;font-size:13px;'
+            f'background-color:#FFFFFF;">'
             f'Open Mumma Master</a>'
         )
     else:
@@ -1764,7 +1805,10 @@ def main() -> None:
     product_detailed = load_product_insights_detailed()
 
     ctx = determine_week_context(ledger, args.week)
-    logging.info(f"Building weekly report for week starting {ctx.week_start} (prev: {ctx.prev_week_start})")
+    logging.info(
+        f"Building weekly report for week {ctx.week_start} – {ctx.report_date} "
+        f"(prev week from {ctx.prev_week_start})"
+    )
 
     weekly_kpis = summarize_week(ledger, ctx)
     
