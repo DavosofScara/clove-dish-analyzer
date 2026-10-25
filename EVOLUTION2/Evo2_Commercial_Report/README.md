@@ -36,6 +36,31 @@ Reuses `EVOLUTION2/.env` at the repo root:
 - `DROPBOX_CLIENT_DATABASE_URL` (optional): Dropbox **share link** to the same file (documentation / your records; **pandas does not load from this URL** — use a local `CLIENT_DB_PATH`).
 - `CLIENT_DB_SHEET_NAME` (optional): sheet name (default **`MARKETING_MAIL`**, unchanged from original). Set **`CLIENTS`** when **DATE CONFIRME** is on that sheet.
 
+### CDP weekly report (`EVO2_CDP_WEEKLY_REPORT`)
+
+Same email as the commercial weekly report **except section 3**: no « Conversion par CDP » (3.1 / 3.2). Section 3 (**Indicateurs commerciaux**) is built in `src/cdp_section3.py` + `src/cdp_section3_metrics.py` (pipeline cards, DATE CONFIRME stats, named client/agent lists, type mix + site margin charts). Sections 1, 2, and 4 are unchanged.
+
+**Recipients** (separate from the commercial list):
+
+- `CDP_RECIPIENT_EMAIL` or `CDP_RECIPIENT_EMAILS` (required for `--send`)
+- `CDP_CC_EMAIL` or `CDP_CC_EMAILS` (optional)
+
+**Preview / send:**
+
+```bash
+python -m src.cdp_main --dry-run
+# outputs/cdp_weekly_report_preview.html
+
+python -m src.cdp_main --send
+```
+
+**Schedule — Monday 09:20 (local time)** — use `scripts/send_cdp_weekly_report.sh` and either:
+
+- `scripts/com.clove.evo2-cdp-weekly-report.plist` (launchd; copy to `~/Library/LaunchAgents/`), or
+- the commented line in `scripts/crontab.example` (`20 9 * * 1`).
+
+Do not run commercial and CDP sends in the same minute unless you intend two emails back-to-back (09:10 vs 09:20).
+
 ### Logos (email header)
 
 The **Clove** image (wordmark + icon + tagline such as *Forensic profits in food and beverage*) is your **Clove** brand logo. `main.py` embeds the **first file that exists** from `CLOVE_LOGO_CANDIDATES` in `src/config.py` (e.g. repo-root `Color logo - no background.png`, then `clove_logo.png`, etc.). **Evolution2** uses `EVO2_LOGO_CANDIDATES` the same way. To change what recipients see, replace the image file or reorder the candidate list.
@@ -51,6 +76,23 @@ Same workbook as the main weekly report:
 Sheet: `extract_devis`
 
 **Clients database** (`Clients Database.xlsx`): default sheet **`MARKETING_MAIL`** (as originally). Set **`CLIENT_DB_SHEET_NAME=CLIENTS`** in `.env` if Power Query writes **DATE CONFIRME** there. Used to enrich **`TYPE_DE_CLIENT`** and **`DATE CONFIRME`** → `DATE_CONFIRME_CLIENT` on the extract before KPIs.
+
+### Run — annual report (manual; does not affect weekly)
+
+Fiscal year **01/10 – 30/09**. Independent entrypoint — leave the Monday LaunchAgent alone.
+
+```bash
+# Close-of-year preview (tweak as needed)
+python -m src.annual_main --dry-run --as-of 2026-09-30
+
+# Preview HTML
+# outputs/annual_report_preview.html
+
+# Send manually (e.g. 01/10)
+python -m src.annual_main --send --as-of 2026-09-30
+```
+
+Annual sections: overview cards + insight bullets, CA year/HIVER/ÉTÉ + cumulative YoY chart, top prestations by CA and by quantity (`Nb_Unite`), site PDV, compact CDP top 5 (no scatter/margin charts).
 
 ### Run
 
@@ -122,16 +164,25 @@ Use a Launch Agent so the job runs in your GUI session with predictable paths an
    ```bash
    /bin/cp -f scripts/com.clove.evo2-weekly-commercial-report.plist ~/Library/LaunchAgents/
    launchctl bootout "gui/$(id -u)/com.clove.evo2-weekly-commercial-report" 2>/dev/null || true
-   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist
+   launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist \
+     || launchctl load -w ~/Library/LaunchAgents/com.clove.evo2-weekly-commercial-report.plist
+   launchctl enable "gui/$(id -u)/com.clove.evo2-weekly-commercial-report"
    ```
 
-3. Verify:
+   A file in `~/Library/LaunchAgents/` is **not enough** — the job must be **loaded**. If `bootstrap` returns I/O error 5, use `launchctl load -w` (as above).
+
+3. **Mandatory verify** (do not assume from plist alone):
 
    ```bash
-   launchctl print "gui/$(id -u)/com.clove.evo2-weekly-commercial-report"
+   launchctl print "gui/$(id -u)/com.clove.evo2-weekly-commercial-report" | head -50
+   launchctl list | grep evo2-weekly-commercial
    ```
 
-4. Logs: `logs/launchd.out.log` and `logs/launchd.err.log` next to this project.
+   You must see the service (not “Could not find service”) and calendar trigger **Weekday=1 Hour=9 Minute=10**.  
+   Re-check after reboot/logout — agents sometimes drop and need reload.
+
+4. Logs: `logs/launchd.out.log` and `logs/launchd.err.log` next to this project.  
+   Mac should be **awake / logged in** at 09:10 (closed-lid sleep is unreliable for LaunchAgents).
 
 **Do not** also add the same Monday 09:10 line to `crontab` — you would send **two** emails. Pick **either** cron **or** launchd.
 

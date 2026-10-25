@@ -14,8 +14,24 @@ from .config import (
 )
 from .weekly_kpis import WeeklyKpiResult
 
-# Placeholder until historical YoY series; week-row confirmés still not shown.
+# Placeholder when YoY value is unavailable.
 _KPI_PLACEHOLDER = "-"
+
+
+def _format_yoy_cell(value: Optional[float]) -> str:
+    if value is None:
+        return _KPI_PLACEHOLDER
+    return format_currency(value)
+
+
+def _format_ecart_cell(current: float, prior: Optional[float]) -> str:
+    if prior is None:
+        return _KPI_PLACEHOLDER
+    delta = current - prior
+    if abs(delta) < 0.5:
+        return format_currency(0)
+    sign = "+" if delta > 0 else "-"
+    return f"{sign}{format_currency(abs(delta))}"
 
 
 def _load_logo_base64(path: Path) -> str | None:
@@ -26,9 +42,12 @@ def _load_logo_base64(path: Path) -> str | None:
 
 
 def format_currency(value: float) -> str:
+    """Format € amounts with non-breaking spaces so email clients keep value on one line."""
+    nbsp = "\u00a0"
     if value is None:
-        return "0 €"
-    return f"{int(round(value)):,} €".replace(",", " ")
+        return f"0{nbsp}€"
+    num = f"{int(round(value)):,}".replace(",", nbsp)
+    return f"{num}{nbsp}€"
 
 
 def format_percent(value: float) -> str:
@@ -70,31 +89,29 @@ def _table_rows(rows: List[List[Tuple[str, Optional[float]]]]) -> str:
 
 def _kpi_metric_table(rows: List[Tuple[str, str, str, str]]) -> str:
     """
-    Sections 1–2: Libellé | Période actuelle | N-1 (YoY) | Écart.
-    YoY/Écart use _KPI_PLACEHOLDER until historical data is available.
+    Section 2 CA table — same structure and cell styling as section 3.1/3.2 CDP tables.
     """
     th = (
-        f'padding:8px 10px;border-bottom:1px solid {THEME_TABLE_DIVIDER};'
+        f"padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};"
         f"color:{THEME_MUTED};font-size:12px;font-weight:500;"
     )
     head = (
         "<thead><tr>"
         f'<th align="left" style="{th}">Libellé</th>'
         f'<th align="right" style="{th}">Période actuelle</th>'
-        f'<th align="right" style="{th}">N-1 (YoY)</th>'
+        f'<th align="right" style="{th}">N-1</th>'
         f'<th align="right" style="{th}">Écart</th>'
         "</tr></thead><tbody>"
     )
-    td_l = (
-        f"padding:10px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};color:#e2e5eb;"
-    )
+    td_base = f"padding:8px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};"
+    td_l = f'{td_base}color:#f5f5f5;text-align:left;'
     td_cur = (
-        f"padding:10px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};"
-        f"text-align:right;font-weight:600;color:{THEME_TEXT};"
+        f"{td_base}color:{THEME_TEXT};text-align:right;"
+        f"white-space:nowrap;"
     )
     td_ph = (
-        f"padding:10px 12px;border-bottom:1px solid {THEME_TABLE_DIVIDER};"
-        f"text-align:right;color:{THEME_MUTED};"
+        f"{td_base}color:#e2e5eb;text-align:right;"
+        f"white-space:nowrap;"
     )
     parts = [head]
     for label, cur, yoy, delta in rows:
@@ -115,14 +132,49 @@ def _dossier_metric_card(
     title: str,
     value: str,
     period_line: str,
+    uniform_height: bool = False,
 ) -> str:
     """Single metric card for the dossier grid (French client-facing labels)."""
+    period_html = (
+        f'<div style="color:{THEME_MUTED};font-size:10px;margin-top:8px;line-height:1.35;">{period_line}</div>'
+        if period_line
+        else ""
+    )
+    title_style = (
+        f"color:{THEME_MUTED};font-size:12px;font-weight:600;line-height:1.3;"
+    )
+    value_px = 26
+    td_extra = ""
+    box_extra = ""
+    inner_block = ""
+    if uniform_height:
+        value_px = 20
+        td_extra = "height:1px;"
+        box_extra = "min-height:104px;box-sizing:border-box;"
+        value_style = (
+            f"color:{THEME_TEXT};font-size:{value_px}px;font-weight:700;"
+            f"line-height:1.2;white-space:nowrap;margin-top:6px;"
+        )
+        inner_block = f"""
+                    <div style="display:table;width:100%;height:100%;min-height:76px;">
+                      <div style="display:table-cell;vertical-align:middle;text-align:center;">
+                        <div style="{title_style}">{title}</div>
+                        <div style="{value_style}">{value}</div>
+                      </div>
+                    </div>"""
+    else:
+        value_style = (
+            f"color:{THEME_TEXT};font-size:{value_px}px;font-weight:700;"
+            f"margin-top:8px;line-height:1.2;"
+        )
+        inner_block = f"""
+                    <div style="{title_style}">{title}</div>
+                    <div style="{value_style}">{value}</div>"""
     return f"""
-                <td width="33.33%" valign="top" style="padding:4px;">
-                  <div style="background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:14px 12px;text-align:center;">
-                    <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;line-height:1.3;">{title}</div>
-                    <div style="color:{THEME_TEXT};font-size:26px;font-weight:700;margin-top:8px;line-height:1.2;">{value}</div>
-                    <div style="color:{THEME_MUTED};font-size:10px;margin-top:8px;line-height:1.35;">{period_line}</div>
+                <td width="33.33%" valign="top" style="padding:4px;{td_extra}">
+                  <div style="background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:14px 12px;text-align:center;{box_extra}">
+                    {inner_block}
+                    {period_html}
                   </div>
                 </td>"""
 
@@ -196,21 +248,34 @@ def build_dossier_kpi_cards_html(kpi: WeeklyKpiResult, week_range_label: str) ->
 
 
 def _kpi_ca_rows(kpi: WeeklyKpiResult) -> str:
-    d = _KPI_PLACEHOLDER
     rows = [
-        ("Chiffre d'affaires réalisé HT (semaine)", format_currency(kpi.ca_realise_semaine), d, d),
-        ("Chiffre d'affaires confirmé HT (saison en cours)", format_currency(kpi.ca_realise_saison), d, d),
         (
-            f"CA prévisionnel HT — {kpi.current_season.label} (En cours)",
-            format_currency(kpi.ca_provisionnel_saison_cours),
-            d,
-            d,
+            "CA réalisé HT (semaine)",
+            format_currency(kpi.ca_realise_semaine),
+            _format_yoy_cell(kpi.ca_realise_semaine_yoy),
+            _format_ecart_cell(kpi.ca_realise_semaine, kpi.ca_realise_semaine_yoy),
         ),
         (
-            f"CA prévisionnel HT — {kpi.next_season.label} (saison suivante)",
+            "CA confirmé HT (saison)",
+            format_currency(kpi.ca_realise_saison),
+            _format_yoy_cell(kpi.ca_realise_saison_yoy),
+            _format_ecart_cell(kpi.ca_realise_saison, kpi.ca_realise_saison_yoy),
+        ),
+        (
+            f"CA prévisionnel HT — {kpi.current_season.label}",
+            format_currency(kpi.ca_provisionnel_saison_cours),
+            _format_yoy_cell(kpi.ca_provisionnel_saison_cours_yoy),
+            _format_ecart_cell(
+                kpi.ca_provisionnel_saison_cours, kpi.ca_provisionnel_saison_cours_yoy
+            ),
+        ),
+        (
+            f"CA prévisionnel HT — {kpi.next_season.label}",
             format_currency(kpi.ca_provisionnel_saison_suivante),
-            d,
-            d,
+            _format_yoy_cell(kpi.ca_provisionnel_saison_suivante_yoy),
+            _format_ecart_cell(
+                kpi.ca_provisionnel_saison_suivante, kpi.ca_provisionnel_saison_suivante_yoy
+            ),
         ),
     ]
     return _kpi_metric_table(rows)
@@ -343,6 +408,7 @@ def build_weekly_email_html(
     sm_end = kpi.season_metrics_end.strftime("%d/%m/%Y")
     report_date_label = kpi.season_metrics_end.strftime("%d/%m/%Y")
     week_end_label = kpi.week_end.strftime("%d/%m/%Y")
+    prior_label = kpi.prior_season.label if kpi.prior_season else "N-1"
 
     definitions_html = f"""
                 <div style="font-size:11px;line-height:1.65;color:#e2e5eb;">
@@ -357,10 +423,10 @@ def build_weekly_email_html(
                   <em>Confirmés (saison)</em> : confirmés, <code>Date_opération</code> sur toute la <strong>saison calendaire</strong> ({proposed_season_start} – {proposed_season_end}) — approximation en l’absence d’une date de confirmation dédiée.
                   <em>Semaine</em> : <em>réalisés</em> = confirmés, <code>Date_opération</code> dans la semaine de référence ; <em>confirmés (semaine)</em> = <code>CLIENT_ID</code> distincts sur l’extract dont la clé <strong>NOM_CLIENT + NOM_AGENT</strong> correspond à <strong>au moins une ligne</strong> de la feuille Clients avec <strong>DATE CONFIRME</strong> dans la même semaine (toutes les lignes Clients comptent, pas seulement une ligne « représentative »).
                   <em>Propositions envoyées (semaine)</em> : <code>Date_Demande</code> dans la semaine de référence, tous statuts.
-                  <em>Propositions envoyées (saison)</em> : <code>Date_opération</code> sur toute la saison calendaire.
-                  <em>N-1 / Écart</em> : « - » en attente d’historique.<br/><br/>
+                  <em>Propositions envoyées (saison)</em> : <code>Date_opération</code> sur toute la saison calendaire.<br/><br/>
 
-                  <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. <em>CA réalisé (semaine)</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence. <em>CA confirmé (saison en cours)</em> : même somme sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. Colonnes <em>N-1</em> et <em>Écart</em> : comparaison à la <strong>saison précédente de même type</strong> ({prior_label}), calendrier <strong>aligné</strong> (même position relative dans la saison ; pour <strong>ÉTÉ 25</strong>, N-1 confirmé provient de <code>ete_2025_definitive.csv</code>). <em>Écart</em> = période actuelle − N-1 (€ HT).
+                  <em>CA réalisé (semaine)</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence (N-1 : semaine alignée sur {prior_label}). <em>CA confirmé (saison en cours)</em> : même somme sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
                   <em>CA prévisionnel (En cours)</em> — ligne « {kpi.current_season.label} (En cours) » : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière).
                   <strong>(2)</strong> + complément pipeline : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients.
                   <em>CA prévisionnel (saison suivante)</em> — ligne « {kpi.next_season.label} (saison suivante) » : mêmes règles sur ({next_season_start} – {next_season_end}).
@@ -443,6 +509,214 @@ def build_weekly_email_html(
           {cdp_season_html}
 
           {cdp_year_html}
+
+          <tr>
+            <td style="padding-top:4px;padding-bottom:12px;">
+              <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">
+                4. PDV confirmé par site
+              </div>
+              <div style="color:{THEME_MUTED};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
+                Saison en cours
+              </div>
+              <div style="color:{THEME_MUTED};font-size:12px;margin-bottom:8px;">
+                {site_chart_period_label}
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_site_bars_uri}" alt="PDV confirmé par site — saison en cours" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:4px;padding-bottom:18px;">
+              <div style="color:{THEME_MUTED};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">
+                Saison suivante
+              </div>
+              <div style="color:{THEME_MUTED};font-size:12px;margin-bottom:8px;">
+                {site_chart_next_period_label}
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_site_bars_next_uri}" alt="PDV confirmé par site — saison suivante" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:2px;padding-bottom:16px;">
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:12px;color:{THEME_TEXT};">
+                <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">
+                  Définitions
+                </div>
+                {definitions_html}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:4px;padding-bottom:8px;">
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <a href="{dropbox_url}" target="_blank" style="display:inline-block;background:{THEME_DARK};color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 20px;border-radius:8px;border:2px solid {CLOVE_GREEN_DARK};">
+                      Ouvrir le rapport complet
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <div style="color:{THEME_MUTED};font-size:11px;margin-top:12px;line-height:1.45;max-width:520px;">
+                <strong>Transfert / réponse :</strong> Gmail et d’autres messageries peuvent modifier l’affichage du corps du message.
+                Une copie du rapport est jointe au format HTML — ouvrez la pièce jointe dans Chrome, Safari ou Edge pour retrouver la mise en forme et les logos d’origine.
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+"""
+    return html
+
+
+def build_cdp_weekly_email_html(
+    clove_logo_path: Path | None,
+    evo2_logo_path: Path | None,
+    kpi: WeeklyKpiResult,
+    section_3_html: str,
+    section_3_definitions_html: str,
+    chart_cumulative_yoy_uri: str,
+    chart_site_bars_uri: str,
+    site_chart_period_label: str,
+    chart_site_bars_next_uri: str,
+    site_chart_next_period_label: str,
+    dropbox_url: str,
+    week_range_label: str,
+) -> str:
+    """Weekly email for CDPs: sections 1, 2, custom 3, and 4 (no conversion CDP block)."""
+    clove_logo = _load_logo_base64(clove_logo_path) if clove_logo_path else None
+    evo2_logo = _load_logo_base64(evo2_logo_path) if evo2_logo_path else None
+
+    clove_img_html = (
+        f'<img src="data:image/png;base64,{clove_logo}" alt="" style="height:32px;" />'
+        if clove_logo
+        else ""
+    )
+    evo2_img_html = (
+        f'<img src="data:image/png;base64,{evo2_logo}" alt="Evolution2" style="height:32px;" />'
+        if evo2_logo
+        else '<span style="color:#f5f5f5;font-weight:600;">Evolution2</span>'
+    )
+
+    dossier_cards_html = build_dossier_kpi_cards_html(kpi, week_range_label)
+    ca_table = _kpi_ca_rows(kpi)
+
+    proposed_season_start = kpi.current_season.start.strftime("%d/%m/%Y")
+    proposed_season_end = kpi.current_season.end.strftime("%d/%m/%Y")
+    next_season_start = kpi.next_season.start.strftime("%d/%m/%Y")
+    next_season_end = kpi.next_season.end.strftime("%d/%m/%Y")
+
+    sm_start = kpi.current_season.start.strftime("%d/%m/%Y")
+    sm_end = kpi.season_metrics_end.strftime("%d/%m/%Y")
+    report_date_label = kpi.season_metrics_end.strftime("%d/%m/%Y")
+    week_end_label = kpi.week_end.strftime("%d/%m/%Y")
+    prior_label = kpi.prior_season.label if kpi.prior_season else "N-1"
+
+    definitions_html = f"""
+                <div style="font-size:11px;line-height:1.65;color:#e2e5eb;">
+                  <strong>Source.</strong> Feuille <code>extract_devis</code> (Evolution2_Report_V13.xlsm) ; enrichissement <code>TYPE_DE_CLIENT</code> et <code>DATE CONFIRME</code> via la base Clients (feuille Excel configurée côté pipeline, ex. <code>CLIENTS</code>), jointure NOM_CLIENT + NOM_AGENT.<br/><br/>
+
+                  <strong>Semaine de référence.</strong> Lundi–dimanche, celle qui se termine au <strong>dernier dimanche ≤ date du rapport</strong> (un lundi matin = dimanche d’hier ; un dimanche = ce même dimanche, pas la semaine d’avant).<br/><br/>
+
+                  <strong>Saisons (calendrier fiscal).</strong> HIVER : 01/10–30/04. ÉTÉ : 01/05–30/09.<br/><br/>
+
+                  <strong>1. Dossiers.</strong> Un dossier = un <code>CLIENT_ID</code> distinct.
+                  <em>Réalisés (saison)</em> : confirmés, <code>Date_opération</code> du début de saison au <strong>min(date du rapport, fin de saison)</strong> ({sm_start} – {sm_end} pour ce rapport).
+                  <em>Confirmés (saison)</em> : confirmés, <code>Date_opération</code> sur toute la <strong>saison calendaire</strong> ({proposed_season_start} – {proposed_season_end}) — approximation en l’absence d’une date de confirmation dédiée.
+                  <em>Semaine</em> : <em>réalisés</em> = confirmés, <code>Date_opération</code> dans la semaine de référence ; <em>confirmés (semaine)</em> = <code>CLIENT_ID</code> distincts sur l’extract dont la clé <strong>NOM_CLIENT + NOM_AGENT</strong> correspond à <strong>au moins une ligne</strong> de la feuille Clients avec <strong>DATE CONFIRME</strong> dans la même semaine (toutes les lignes Clients comptent, pas seulement une ligne « représentative »).
+                  <em>Propositions envoyées (semaine)</em> : <code>Date_Demande</code> dans la semaine de référence, tous statuts.
+                  <em>Propositions envoyées (saison)</em> : <code>Date_opération</code> sur toute la saison calendaire.<br/><br/>
+
+                  <strong>2. Chiffre d’affaires HT.</strong> Tous les montants du tableau (section 2) sont <strong>hors taxes (HT)</strong>. Colonnes <em>N-1</em> et <em>Écart</em> : comparaison à la <strong>saison précédente de même type</strong> ({prior_label}), calendrier <strong>aligné</strong> (même position relative dans la saison ; pour <strong>ÉTÉ 25</strong>, N-1 confirmé provient de <code>ete_2025_definitive.csv</code>). <em>Écart</em> = période actuelle − N-1 (€ HT).
+                  <em>CA réalisé (semaine)</em> : somme <code>PDV_DEVIS_CONFIRME</code> sur lignes confirmées ; <code>Date_opération</code> dans la semaine de référence (N-1 : semaine alignée sur {prior_label}). <em>CA confirmé (saison en cours)</em> : même somme sur la <strong>saison calendaire complète</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <em>CA prévisionnel (En cours)</em> — ligne « {kpi.current_season.label} (En cours) » : <strong>(1)</strong> même base confirmée que le CA confirmé saison (saison calendaire entière).
+                  <strong>(2)</strong> + complément pipeline : lignes <strong>EN COURS</strong> (hors annulés), <code>Date_opération</code> du <strong>lendemain</strong> de <code>min(dimanche semaine terminée, fin de saison)</code> jusqu’à la <strong>fin de saison</strong> ; par <code>CLIENT_ID</code> : somme <code>PDV_DEVIS</code> ÷ <code>DEVIS_ID</code> distincts, puis somme des clients.
+                  <em>CA prévisionnel (saison suivante)</em> — ligne « {kpi.next_season.label} (saison suivante) » : mêmes règles sur ({next_season_start} – {next_season_end}).
+                  <em>Coupe des dates</em> : le CA prévisionnel utilise le <strong>dimanche de fin de semaine de référence</strong> ({week_end_label}) pour la fenêtre EN COURS ; les dossiers réalisés (saison) et la <strong>ligne épaisse</strong> du graphique CA cumulé utilisent la <strong>date du rapport</strong> ({report_date_label}) — ces deux dates peuvent différer si le rapport est produit en milieu de semaine.<br/><br/>
+
+                  <strong>Graphique — CA cumulé (sous le tableau, section 2).</strong> Trois courbes, toutes en <strong>CA confirmé HT</strong> cumulé par <code>Date_opération</code> (<code>PDV_DEVIS_CONFIRME</code>, CONFIRMÉ). Axe = calendrier de la <strong>saison en cours</strong> ({proposed_season_start} – {proposed_season_end}).
+                  <strong>Ligne épaisse (vert)</strong> — <em>réalisé à date du rapport</em> ({report_date_label}) : événements déjà datés jusqu’à cette date (aligné avec les dossiers réalisés saison).
+                  <strong>Ligne fine (vert clair)</strong> — <em>confirmé saison entière</em> : même base que la ligne du tableau « CA confirmé (saison en cours) » ({proposed_season_start} – {proposed_season_end}, y compris <code>Date_opération</code> futures dans l’extract).
+                  <strong>Ligne grise</strong> — N-1 de <strong>même type</strong> (HIVER vs HIVER, ÉTÉ vs ÉTÉ), saison précédente entière, <strong>alignée</strong> sur le calendrier relatif de la saison en cours. Pour <strong>ÉTÉ 25</strong>, N-1 provient de <code>ete_2025_definitive.csv</code> ; les autres saisons N-1 restent sur l’extract V13.<br/><br/>
+
+                  {section_3_definitions_html}
+
+                  <strong>4. PDV par site.</strong> Les statistiques de ces graphiques reposent <strong>uniquement sur les dossiers confirmés</strong> (devis <code>CONFIRME</code> = CONFIRMÉ dans l’extract) — <strong>pas sur les dossiers EN COURS</strong> (contrairement au CA prévisionnel de la section 2). Montant = somme <code>PDV_DEVIS_CONFIRME</code> (HT) par site. Regroupement par la colonne <code>SITE</code> de l’extract (<strong>pas</strong> <code>SITE_EVOLUTION</code>, <code>SITE_EVO2</code> ni CDP). Graphique bleu — <em>Saison en cours</em> : <code>Date_opération</code> sur toute la <strong>saison calendaire</strong> ({proposed_season_start} – {proposed_season_end}). Graphique orange — <em>Saison suivante</em> : <code>Date_opération</code> sur toute la saison suivante ({next_season_start} – {next_season_end}), p. ex. {kpi.next_season.label}.
+                </div>
+"""
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rapport hebdomadaire CDP – Evolution2</title>
+</head>
+<body style="margin:0;padding:0;background:#0b0d12;color:{THEME_TEXT};font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0b0d12;padding:24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="700" cellspacing="0" cellpadding="0" style="background:#0f121a;border-radius:14px;padding:22px;border:1px solid {THEME_BORDER};">
+          <tr>
+            <td style="padding-bottom:12px;border-bottom:1px solid {THEME_BORDER};">
+              <table role="presentation" width="100%">
+                <tr>
+                  <td align="left">{evo2_img_html}</td>
+                  <td align="right">{clove_img_html}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:16px;padding-bottom:12px;">
+              <div style="font-size:20px;font-weight:700;color:{THEME_TEXT};">
+                Rapport hebdomadaire CDP – Evolution2
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:8px;padding-bottom:14px;">
+              <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">
+                1. Nombre de dossiers
+              </div>
+              <div style="border-radius:10px;border:1px solid {THEME_BORDER};background-color:#0f121a;padding:12px 4px;">
+                  {dossier_cards_html}
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding-top:4px;padding-bottom:16px;">
+              <div style="color:{THEME_MUTED};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">
+                2. Chiffre d'affaires HT
+              </div>
+              <table width="100%" cellspacing="0" cellpadding="0" style="border-radius:10px;background-color:{THEME_DARK};border:1px solid {THEME_BORDER};border-collapse:collapse;">
+                  {ca_table}
+              </table>
+              <div style="color:{THEME_MUTED};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-top:14px;margin-bottom:6px;">
+                CA réalisé cumulé — réalisé vs confirmé (saison) vs N-1
+              </div>
+              <div style="background:{THEME_DARK};border:1px solid {THEME_BORDER};border-radius:10px;padding:10px;text-align:center;">
+                <img src="{chart_cumulative_yoy_uri}" alt="CA cumulé confirmé — comparaison saison" style="max-width:100%;height:auto;border-radius:6px;" />
+              </div>
+            </td>
+          </tr>
+
+          {section_3_html}
 
           <tr>
             <td style="padding-top:4px;padding-bottom:12px;">

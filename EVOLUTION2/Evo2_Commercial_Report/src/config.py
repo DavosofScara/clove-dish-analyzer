@@ -70,6 +70,14 @@ RECIPIENT_EMAILS = parse_recipient_list(
 # Optional CC (comma/semicolon-separated); CC_EMAILS or CC_EMAIL
 CC_EMAILS = parse_recipient_list(os.getenv("CC_EMAILS", "") or os.getenv("CC_EMAIL", ""))
 
+# CDP weekly report (Monday 09:20) — separate recipient list from commercial report
+CDP_RECIPIENT_EMAILS = parse_recipient_list(
+    os.getenv("CDP_RECIPIENT_EMAILS", "") or os.getenv("CDP_RECIPIENT_EMAIL", "")
+)
+CDP_CC_EMAILS = parse_recipient_list(
+    os.getenv("CDP_CC_EMAILS", "") or os.getenv("CDP_CC_EMAIL", "")
+)
+
 
 # ---------------------------------------------------------------------------
 # Data source (same as weekly report)
@@ -130,4 +138,6 @@ THEME_TEXT = "#f5f5f5"
 THEME_MUTED = "#9ea3b5"
 THEME_TABLE_DIVIDER = "#2a2d35"
 THEME_ORANGE = "#e07c3c"
+THEME_TREND_UP = CLOVE_GREEN  # positive YoY
+THEME_TREND_DOWN = "#e85d5d"  # negative YoY
 

@@ -469,6 +469,164 @@ def load_ete_2025_definitive(path: Path | None = None) -> pd.DataFrame:
     return df
 
 
+def load_dossier_travail_master(path: Path | None = None) -> pd.DataFrame:
+    """Legacy DOSSIER TRAVAIL snapshot used when the live extract has no N-1 rows."""
+    from .config import DOSSIER_TRAVAIL_MASTER_CSV
+
+    p = path or DOSSIER_TRAVAIL_MASTER_CSV
+    if not p.exists():
+        logger.warning("Dossier travail master missing: %s", p)
+        return pd.DataFrame()
+    df = pd.read_csv(p, low_memory=False)
+    if "Date opération" not in df.columns:
+        logger.warning("Dossier travail master missing Date opération column")
+        return pd.DataFrame()
+    out = df.copy()
+    out["_date"] = _parse_date(out["Date opération"])
+    out["_amt"] = out["Prix de vente final"].map(_amount) if "Prix de vente final" in out.columns else 0.0
+    out["_conf"] = out["EC/C/A"].map(_recap_is_confirmed) if "EC/C/A" in out.columns else False
+    client_col = "Clients" if "Clients" in out.columns else None
+    out["_client"] = out[client_col].map(_norm_client) if client_col else ""
+    out["_cdp"] = out["CDP"].map(_norm_cdp) if "CDP" in out.columns else ""
+    return out
+
+
+def travail_period_metrics(start: date, end: date) -> dict:
+    """
+    Prior-year fallback KPIs from dossier_travail_master (one row ≈ one dossier).
+
+    Dedupes on date + amount + CDP + client to limit snapshot double-counts.
+    Returns ca_confirme, dossiers_confirmes, dossiers_proposes, pdv_median_client.
+    """
+    empty = {
+        "ca_confirme": 0.0,
+        "dossiers_confirmes": 0,
+        "dossiers_proposes": 0,
+        "pdv_median_client": 0.0,
+        "source": "dossier_travail_master",
+    }
+    raw = load_dossier_travail_master()
+    if raw.empty:
+        return empty
+
+    m = raw["_date"].notna() & (raw["_date"] >= pd.Timestamp(start)) & (
+        raw["_date"] <= pd.Timestamp(end)
+    )
+    period = raw.loc[m].copy()
+    if period.empty:
+        return empty
+
+    # Light dedupe across overlapping Source File snapshots
+    period = period.drop_duplicates(
+        subset=["_date", "_amt", "_cdp", "_client"], keep="first"
+    )
+
+    any_clients = period.loc[period["_client"] != "", "_client"]
+    conf = period.loc[period["_conf"]]
+    conf_clients = conf.loc[conf["_client"] != "", "_client"]
+
+    ca = float(conf["_amt"].sum()) if len(conf) else 0.0
+    n_conf = int(conf_clients.nunique()) if len(conf_clients) else 0
+    n_prop = int(any_clients.nunique()) if len(any_clients) else 0
+
+    median = 0.0
+    if len(conf_clients):
+        by_client = conf.groupby("_client")["_amt"].sum()
+        if len(by_client):
+            median = float(by_client.median())
+
+    logger.info(
+        "Travail historical %s→%s: CA=%.0f dossiers_conf=%d proposes=%d",
+        start,
+        end,
+        ca,
+        n_conf,
+        n_prop,
+    )
+    return {
+        "ca_confirme": ca,
+        "dossiers_confirmes": n_conf,
+        "dossiers_proposes": n_prop,
+        "pdv_median_client": median,
+        "source": "dossier_travail_master",
+    }
+
+
+def daily_confirmed_pdv_from_travail(start: date, end: date) -> pd.Series:
+    """
+    Confirmed CA by calendar day (Date opération) from dossier_travail_master.
+    Index: ``datetime.date``; values: float € HT. Empty series if no data.
+    """
+    raw = load_dossier_travail_master()
+    if raw.empty:
+        return pd.Series(dtype=float)
+
+    m = (
+        raw["_conf"]
+        & raw["_date"].notna()
+        & (raw["_date"] >= pd.Timestamp(start))
+        & (raw["_date"] <= pd.Timestamp(end))
+    )
+    period = raw.loc[m].copy()
+    if period.empty:
+        return pd.Series(dtype=float)
+
+    period = period.drop_duplicates(
+        subset=["_date", "_amt", "_cdp", "_client"], keep="first"
+    )
+    period["_day"] = period["_date"].map(
+        lambda x: x.date() if hasattr(x, "date") and callable(getattr(x, "date")) else x
+    )
+    daily = period.groupby("_day", sort=True)["_amt"].sum()
+    return daily.astype(float)
+
+
+def compute_prior_fiscal_year_daily_confirmed(prior: SeasonPeriod) -> pd.Series:
+    """
+    Daily confirmed CA for a prior fiscal year when V14 has no N-1 ops.
+
+    Same composition as annual KPI YoY:
+    - HIVER → ``dossier_travail_master`` (Date opération, EC/C/A = C)
+    - ÉTÉ 25 → ``ete_2025_definitive.csv`` when that season; else travail
+    """
+    from .cumulative_season_yoy import compute_daily_confirmed_pdv
+    from .periods import next_season_after, season_containing
+
+    hiver = season_containing(prior.start)
+    ete = next_season_after(hiver)
+
+    daily_h = daily_confirmed_pdv_from_travail(hiver.start, hiver.end)
+
+    if ete.label == "ÉTÉ 25":
+        hist = load_ete_2025_definitive()
+        if hist.empty:
+            daily_e = daily_confirmed_pdv_from_travail(ete.start, ete.end)
+        else:
+            if "CONFIRME" not in hist.columns:
+                hist = hist.copy()
+                hist["CONFIRME"] = "CONFIRMÉ"
+            cols = {
+                "Date_opération": "Date_opération",
+                "CONFIRME": "CONFIRME",
+                "PDV_DEVIS_CONFIRME": "PDV_DEVIS_CONFIRME",
+            }
+            daily_e = compute_daily_confirmed_pdv(hist, cols, ete.start, ete.end)
+    else:
+        daily_e = daily_confirmed_pdv_from_travail(ete.start, ete.end)
+
+    combined = daily_h.add(daily_e, fill_value=0.0).astype(float)
+    logger.info(
+        "Prior FY daily %s: HIVER days=%d CA=%.0f · ÉTÉ days=%d CA=%.0f · total=%.0f",
+        prior.label,
+        int((daily_h > 0).sum()) if len(daily_h) else 0,
+        float(daily_h.sum()) if len(daily_h) else 0.0,
+        int((daily_e > 0).sum()) if len(daily_e) else 0,
+        float(daily_e.sum()) if len(daily_e) else 0.0,
+        float(combined.sum()) if len(combined) else 0.0,
+    )
+    return combined
+
+
 def _find_date_operation_column(df: pd.DataFrame) -> str | None:
     for c in df.columns:
         norm = str(c).strip().lower().replace("é", "e")

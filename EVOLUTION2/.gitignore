@@ -2,8 +2,10 @@ __pycache__/
 *.pyc
 **/.venv/
 
+# Local secrets and env templates (recover outside git)
 .env
 .env.*
+.env.local
 
 # Local data / reports (except tracked historical definitive CSV)
 data/

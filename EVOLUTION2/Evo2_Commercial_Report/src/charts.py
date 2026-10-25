@@ -150,9 +150,15 @@ ACCENT_PALETTES = {
 }
 
 
-def render_site_pdv_season_bars(site_totals: pd.Series, *, accent: str = "blue") -> str:
+def render_site_pdv_season_bars(
+    site_totals: pd.Series,
+    *,
+    accent: str = "blue",
+    xlabel: str = "PDV confirmé (€)",
+    value_as_percent: bool = False,
+) -> str:
     """
-    Horizontal bars: site on Y, PDV confirmé on X. Highest value at top.
+    Horizontal bars: category on Y, value on X. Highest value at top.
     ``accent`` is ``blue`` (electric blue → dark blue) or ``orange`` (electric orange → dark brown).
     """
     if site_totals.empty:
@@ -189,18 +195,26 @@ def render_site_pdv_season_bars(site_totals: pd.Series, *, accent: str = "blue")
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels([str(x) for x in s.index], color=THEME_TEXT, fontsize=9)
-    ax.set_xlabel("PDV confirmé (€)", color=THEME_TEXT, fontsize=10)
+    ax.set_xlabel(xlabel, color=THEME_TEXT, fontsize=10)
     ax.tick_params(axis="x", colors=THEME_TEXT)
     ax.tick_params(axis="y", colors=THEME_TEXT)
 
-    def _fmt_euro(x, _pos):
-        if x >= 1_000_000:
-            return f"{x/1_000_000:.1f}M"
-        if x >= 1000:
-            return f"{x/1000:.0f}k"
-        return f"{x:.0f}"
+    if value_as_percent:
 
-    ax.xaxis.set_major_formatter(FuncFormatter(_fmt_euro))
+        def _fmt_pct(x, _pos):
+            return f"{x:.0f} %"
+
+        ax.xaxis.set_major_formatter(FuncFormatter(_fmt_pct))
+    else:
+
+        def _fmt_euro(x, _pos):
+            if x >= 1_000_000:
+                return f"{x/1_000_000:.1f}M"
+            if x >= 1000:
+                return f"{x/1000:.0f}k"
+            return f"{x:.0f}"
+
+        ax.xaxis.set_major_formatter(FuncFormatter(_fmt_euro))
     for spine in ax.spines.values():
         spine.set_color(THEME_BORDER)
     ax.grid(axis="x", alpha=0.2, color=THEME_TEXT)
@@ -427,5 +441,78 @@ def render_cdp_margin_bars(
         buf = io.BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
         plt.close(fig)
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
+def render_ranked_horizontal_bars(
+    labels: list[str],
+    values: list[float],
+    *,
+    xlabel: str,
+    accent: str = "green",
+    empty_message: str = "Aucune donnée",
+) -> str:
+    """
+    Horizontal ranked bars (highest at top). Used for annual top prestations.
+    ``accent``: ``green`` | ``blue`` | ``orange``.
+    """
+    green_palette = (CLOVE_GREEN, "#1a2e14")
+    if accent == "green":
+        top_hex, bottom_hex = green_palette
+    else:
+        top_hex, bottom_hex = ACCENT_PALETTES.get(accent, ACCENT_PALETTES["blue"])
+
+    if not labels or not values or all(v == 0 for v in values):
+        fig, ax = plt.subplots(figsize=(8, 4))
+        fig.patch.set_facecolor(THEME_DARK)
+        ax.set_facecolor(THEME_DARK)
+        ax.text(0.5, 0.5, empty_message, ha="center", va="center", color=THEME_TEXT, fontsize=12)
+        ax.axis("off")
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
+        plt.close(fig)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/png;base64,{b64}"
+
+    pairs = sorted(zip(labels, values), key=lambda x: x[1])
+    labs = [p[0] for p in pairs]
+    vals = [float(p[1]) for p in pairs]
+    m = len(labs)
+    fig_h = max(4.0, 0.38 * m + 1.2)
+    fig, ax = plt.subplots(figsize=(9, fig_h))
+    fig.patch.set_facecolor(THEME_DARK)
+    ax.set_facecolor(THEME_DARK)
+
+    top_rgb = np.array(mcolors.to_rgb(top_hex))
+    bottom_rgb = np.array(mcolors.to_rgb(bottom_hex))
+    if m == 1:
+        colors = [top_rgb]
+    else:
+        colors = [bottom_rgb + (top_rgb - bottom_rgb) * (i / (m - 1)) for i in range(m)]
+
+    y_pos = np.arange(m)
+    ax.barh(y_pos, vals, color=colors, height=0.68, edgecolor="none")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([str(x)[:42] for x in labs], color=THEME_TEXT, fontsize=9)
+    ax.set_xlabel(xlabel, color=THEME_TEXT, fontsize=10)
+    ax.tick_params(axis="x", colors=THEME_TEXT)
+    ax.tick_params(axis="y", colors=THEME_TEXT)
+
+    def _fmt(x, _pos):
+        if x >= 1_000_000:
+            return f"{x/1_000_000:.1f}M"
+        if x >= 1000:
+            return f"{x/1000:.0f}k"
+        return f"{x:.0f}"
+
+    ax.xaxis.set_major_formatter(FuncFormatter(_fmt))
+    for spine in ax.spines.values():
+        spine.set_color(THEME_BORDER)
+    ax.grid(axis="x", alpha=0.2, color=THEME_TEXT)
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", dpi=144)
+    plt.close(fig)
     b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
     return f"data:image/png;base64,{b64}"

@@ -137,6 +137,29 @@ def fiscal_year_containing(d: date) -> SeasonPeriod:
     return SeasonPeriod(start, end, f"Année {yy(d.year - 1)}/{yy(d.year)}")
 
 
+def previous_fiscal_year_before(current: SeasonPeriod) -> SeasonPeriod:
+    """
+    Prior fiscal year (YoY): Année 25/26 → Année 24/25.
+
+    ``current`` must be a fiscal-year ``SeasonPeriod`` from ``fiscal_year_containing``.
+    """
+    yy = lambda y: str(y)[-2:]
+    start_year = current.start.year - 1
+    start, end = fiscal_year_bounds(start_year)
+    return SeasonPeriod(start, end, f"Année {yy(start_year)}/{yy(start_year + 1)}")
+
+
+def hiver_and_ete_in_fiscal_year(fy: SeasonPeriod) -> tuple[SeasonPeriod, SeasonPeriod]:
+    """
+    Split a fiscal year into its HIVER then ÉTÉ seasons.
+
+    Année 25/26 → HIVER 25/26 (01/10–30/04) + ÉTÉ 26 (01/05–30/09).
+    """
+    hiver = season_containing(fy.start)
+    ete = next_season_after(hiver)
+    return hiver, ete
+
+
 def season_window_for_metrics(season: SeasonPeriod, as_of: date) -> Tuple[date, date]:
     """
     Inclusive [start, end] for KPIs: from season start through min(as_of, season end).

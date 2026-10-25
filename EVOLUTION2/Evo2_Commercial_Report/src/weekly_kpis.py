@@ -37,12 +37,14 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
+from .historical_master import augment_df_for_prior_season
 from .load_data import augment_client_key, get_ci_column
 from .periods import (
     SeasonPeriod,
     date_in_range,
     next_season_after,
     previous_completed_week,
+    previous_season_before,
     season_containing,
     season_window_for_metrics,
 )
@@ -91,6 +93,13 @@ class WeeklyKpiResult:
     ca_provisionnel_saison_cours: float
     ca_provisionnel_saison_suivante: float
 
+    # YoY N-1 (€); None → table shows « - »
+    prior_season: Optional[SeasonPeriod] = None
+    ca_realise_semaine_yoy: Optional[float] = None
+    ca_realise_saison_yoy: Optional[float] = None
+    ca_provisionnel_saison_cours_yoy: Optional[float] = None
+    ca_provisionnel_saison_suivante_yoy: Optional[float] = None
+
     validation: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -131,17 +140,15 @@ def _unique_clients_by_merged_date_col(
     return int(sub[sub != ""].nunique())
 
 
-def _dossiers_confirme_semaine_week(
+def _client_keys_confirme_semaine_week(
     extract_df: pd.DataFrame,
-    cols: Dict[str, str],
     week_start: date,
     week_end: date,
     client_db: Optional[pd.DataFrame],
-) -> int:
+) -> set[str]:
     """
-    Week « confirmés »: distinct CLIENT_ID on extract whose client_key appears on **any** CLIENTS
-    row with DATE_CONFIRME in [week_start, week_end]. Avoids relying on a single merged row per key
-    (TYPE / DATE_OPERATION pick_row can omit the row that holds the confirmation date).
+    ``client_key`` values with DATE CONFIRME on the Clients sheet in [week_start, week_end].
+    Falls back to merged DATE CONFIRME on the extract when client_db is unavailable.
     """
     if client_db is not None and DATE_CONFIRME_CLIENT_COL in client_db.columns:
         cdf = augment_client_key(client_db.copy())
@@ -154,20 +161,94 @@ def _dossiers_confirme_semaine_week(
             .dropna()
             .unique()
         )
-        key_set = {str(k) for k in keys if str(k).strip()}
-        if "client_key" not in extract_df.columns:
-            return _unique_clients_by_merged_date_col(
-                extract_df, cols["CLIENT_ID"], DATE_CONFIRME_CLIENT_COL, week_start, week_end
-            )
-        if not key_set:
-            return 0
-        cid = cols["CLIENT_ID"]
-        ex_sub = extract_df.loc[extract_df["client_key"].isin(key_set), cid]
-        s = ex_sub.astype(str).str.strip()
-        return int(s[s != ""].nunique())
-    return _unique_clients_by_merged_date_col(
-        extract_df, cols["CLIENT_ID"], DATE_CONFIRME_CLIENT_COL, week_start, week_end
+        return {str(k) for k in keys if str(k).strip()}
+    if DATE_CONFIRME_CLIENT_COL not in extract_df.columns:
+        return set()
+    cdf = extract_df.copy()
+    m = _mask_period(cdf, DATE_CONFIRME_CLIENT_COL, week_start, week_end)
+    keys = (
+        cdf.loc[m, "client_key"]
+        .astype(str)
+        .str.strip()
+        .replace("", pd.NA)
+        .dropna()
+        .unique()
     )
+    return {str(k) for k in keys if str(k).strip()}
+
+
+def _dossiers_confirme_semaine_week(
+    extract_df: pd.DataFrame,
+    cols: Dict[str, str],
+    week_start: date,
+    week_end: date,
+    client_db: Optional[pd.DataFrame],
+) -> int:
+    """
+    Week « confirmés »: distinct CLIENT_ID on extract whose client_key appears on **any** CLIENTS
+    row with DATE_CONFIRME in [week_start, week_end]. Avoids relying on a single merged row per key
+    (TYPE / DATE_OPERATION pick_row can omit the row that holds the confirmation date).
+    """
+    key_set = _client_keys_confirme_semaine_week(
+        extract_df, week_start, week_end, client_db
+    )
+    if "client_key" not in extract_df.columns:
+        return _unique_clients_by_merged_date_col(
+            extract_df, cols["CLIENT_ID"], DATE_CONFIRME_CLIENT_COL, week_start, week_end
+        )
+    if not key_set:
+        return 0
+    cid = cols["CLIENT_ID"]
+    ex_sub = extract_df.loc[extract_df["client_key"].isin(key_set), cid]
+    s = ex_sub.astype(str).str.strip()
+    return int(s[s != ""].nunique())
+
+
+def ca_confirme_semaine_by_date_confirme(
+    extract_df: pd.DataFrame,
+    cols: Dict[str, str],
+    week_start: date,
+    week_end: date,
+    client_db: Optional[pd.DataFrame],
+) -> float:
+    """Sum ``PDV_DEVIS_CONFIRME`` on CONFIRMÉ rows for clients confirmed (DATE CONFIRME) that week."""
+    key_set = _client_keys_confirme_semaine_week(
+        extract_df, week_start, week_end, client_db
+    )
+    if not key_set or "client_key" not in extract_df.columns:
+        return 0.0
+    sub = extract_df.loc[extract_df["client_key"].isin(key_set)]
+    conf = sub[cols["CONFIRME"]].map(is_confirmed_exact)
+    sub = sub.loc[conf]
+    if sub.empty:
+        return 0.0
+    return float(sub[cols["PDV_DEVIS_CONFIRME"]].map(_to_float).sum())
+
+
+def median_pdv_confirme_semaine_by_date_confirme(
+    extract_df: pd.DataFrame,
+    cols: Dict[str, str],
+    week_start: date,
+    week_end: date,
+    client_db: Optional[pd.DataFrame],
+) -> float:
+    """Median total ``PDV_DEVIS_CONFIRME`` per CLIENT_ID for clients confirmed that week."""
+    key_set = _client_keys_confirme_semaine_week(
+        extract_df, week_start, week_end, client_db
+    )
+    if not key_set or "client_key" not in extract_df.columns:
+        return 0.0
+    sub = extract_df.loc[extract_df["client_key"].isin(key_set)]
+    conf = sub[cols["CONFIRME"]].map(is_confirmed_exact)
+    sub = sub.loc[conf]
+    if sub.empty:
+        return 0.0
+    per_client = sub.groupby(cols["CLIENT_ID"])[cols["PDV_DEVIS_CONFIRME"]].apply(
+        lambda s: float(s.map(_to_float).sum())
+    )
+    if per_client.empty:
+        return 0.0
+    return float(per_client.median())
 
 
 def _date_confirme_week_diagnostics(
@@ -303,6 +384,90 @@ def _client_ids_with_date_demande_in_period(
     m = _mask_period(df, date_col, start, end)
     sub = df.loc[m, client_col].astype(str).str.strip()
     return set(sub[sub != ""].unique())
+
+
+def _align_date_to_prior_season(d: date, current: SeasonPeriod, prior: SeasonPeriod) -> date:
+    """Same relative day within prior season (matches cumulative YoY chart alignment)."""
+    return prior.start + (d - current.start)
+
+
+def _clip_to_season(d: date, season: SeasonPeriod) -> date:
+    return max(season.start, min(d, season.end))
+
+
+def _aligned_period_in_prior(
+    start: date,
+    end: date,
+    current: SeasonPeriod,
+    prior: SeasonPeriod,
+) -> Optional[Tuple[date, date]]:
+    """Map [start, end] onto prior season calendar, clipped to prior bounds."""
+    ps = _clip_to_season(_align_date_to_prior_season(start, current, prior), prior)
+    pe = _clip_to_season(_align_date_to_prior_season(end, current, prior), prior)
+    if ps > pe:
+        return None
+    return ps, pe
+
+
+def _compute_ca_yoy(
+    df: pd.DataFrame,
+    cols: Dict[str, str],
+    *,
+    current_season: SeasonPeriod,
+    next_season: SeasonPeriod,
+    week_start: date,
+    week_end: date,
+    report_end_cours: date,
+    report_end_next: date,
+) -> Tuple[SeasonPeriod, Dict[str, Optional[float]]]:
+    """
+    N-1 for section-2 CA rows: prior same-type season, aligned calendar (see cumulative chart).
+    """
+    prior = previous_season_before(current_season)
+    prior_next = next_season_after(prior)
+    df_prior = augment_df_for_prior_season(df, prior)
+
+    out: Dict[str, Optional[float]] = {
+        "ca_realise_semaine_yoy": None,
+        "ca_realise_saison_yoy": None,
+        "ca_provisionnel_saison_cours_yoy": None,
+        "ca_provisionnel_saison_suivante_yoy": None,
+    }
+
+    week_prior = _aligned_period_in_prior(week_start, week_end, current_season, prior)
+    if week_prior:
+        ps, pe = week_prior
+        out["ca_realise_semaine_yoy"] = _ca_realise(df_prior, cols, ps, pe)
+
+    out["ca_realise_saison_yoy"] = _ca_realise(df_prior, cols, prior.start, prior.end)
+
+    prior_report_cours = _clip_to_season(
+        _align_date_to_prior_season(report_end_cours, current_season, prior),
+        prior,
+    )
+    prov_cours_yoy, _ = compute_ca_provisionnel(
+        df_prior, cols, prior.start, prior.end, prior_report_cours
+    )
+    out["ca_provisionnel_saison_cours_yoy"] = prov_cours_yoy
+
+    prior_report_next = _clip_to_season(
+        _align_date_to_prior_season(report_end_next, current_season, prior),
+        prior_next,
+    )
+    prov_next_yoy, _ = compute_ca_provisionnel(
+        df_prior, cols, prior_next.start, prior_next.end, prior_report_next
+    )
+    out["ca_provisionnel_saison_suivante_yoy"] = prov_next_yoy
+
+    logger.info(
+        "CA YoY N-1 (%s): semaine=%s saison=%s prov_cours=%s prov_next=%s",
+        prior.label,
+        out["ca_realise_semaine_yoy"],
+        out["ca_realise_saison_yoy"],
+        out["ca_provisionnel_saison_cours_yoy"],
+        out["ca_provisionnel_saison_suivante_yoy"],
+    )
+    return prior, out
 
 
 def _ca_realise(df: pd.DataFrame, cols: Dict[str, str], start: date, end: date) -> float:
@@ -476,6 +641,17 @@ def compute_weekly_kpis(
     dbg_next["as_of"] = str(as_of)
     dbg_next["week_end"] = str(week_end)
 
+    prior_season, ca_yoy = _compute_ca_yoy(
+        df,
+        cols,
+        current_season=current_season,
+        next_season=next_se,
+        week_start=week_start,
+        week_end=week_end,
+        report_end_cours=report_end_cours,
+        report_end_next=report_end_next,
+    )
+
     n_rows = len(df)
     n_clients_all = int(
         df[cols["CLIENT_ID"]].astype(str).str.strip().replace("", pd.NA).dropna().nunique()
@@ -537,6 +713,21 @@ def compute_weekly_kpis(
         "ca_realise_saison": round(ca_sai, 2),
         "ca_provisionnel_saison_cours": round(prov_cours, 2),
         "ca_provisionnel_saison_suivante": round(prov_next, 2),
+        "prior_season_label": prior_season.label,
+        "ca_realise_semaine_yoy": (
+            round(ca_yoy["ca_realise_semaine_yoy"], 2)
+            if ca_yoy["ca_realise_semaine_yoy"] is not None
+            else None
+        ),
+        "ca_realise_saison_yoy": (
+            round(ca_yoy["ca_realise_saison_yoy"], 2)
+            if ca_yoy["ca_realise_saison_yoy"] is not None
+            else None
+        ),
+        "ca_provisionnel_saison_cours_yoy": round(ca_yoy["ca_provisionnel_saison_cours_yoy"], 2),
+        "ca_provisionnel_saison_suivante_yoy": round(
+            ca_yoy["ca_provisionnel_saison_suivante_yoy"], 2
+        ),
         "provisionnel_cours_breakdown": dbg_cours,
         "provisionnel_next_breakdown": dbg_next,
         "overlap_proposed_confirmed_week": len(c_sem & p_sem),
@@ -561,5 +752,10 @@ def compute_weekly_kpis(
         ca_realise_saison=ca_sai,
         ca_provisionnel_saison_cours=prov_cours,
         ca_provisionnel_saison_suivante=prov_next,
+        prior_season=prior_season,
+        ca_realise_semaine_yoy=ca_yoy["ca_realise_semaine_yoy"],
+        ca_realise_saison_yoy=ca_yoy["ca_realise_saison_yoy"],
+        ca_provisionnel_saison_cours_yoy=ca_yoy["ca_provisionnel_saison_cours_yoy"],
+        ca_provisionnel_saison_suivante_yoy=ca_yoy["ca_provisionnel_saison_suivante_yoy"],
         validation=validation,
     )

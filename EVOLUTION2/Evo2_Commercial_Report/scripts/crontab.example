@@ -19,3 +19,7 @@
 
 # Option C — system python3 (no venv)
 # 10 9 * * 1 cd /ABSOLUTE/PATH/TO/Evo2_Commercial_Report && /usr/bin/python3 -m src.main --send >> /tmp/evo2-weekly-commercial-cron.log 2>&1
+
+# --- CDP weekly report (EVO2_CDP_WEEKLY_REPORT) — Monday 09:20 ---
+# Requires CDP_RECIPIENT_EMAILS in EVOLUTION2/.env (separate from RECIPIENT_EMAILS).
+# 20 9 * * 1 /ABSOLUTE/PATH/TO/Evo2_Commercial_Report/scripts/send_cdp_weekly_report.sh >> /tmp/evo2-cdp-weekly-cron.log 2>&1

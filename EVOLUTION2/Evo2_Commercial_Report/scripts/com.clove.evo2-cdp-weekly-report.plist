@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.clove.evo2-cdp-weekly-report</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/scripts/send_cdp_weekly_report.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report</string>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>20</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/logs/launchd-cdp.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/davidcraig/code/clove/EVOLUTION2/Evo2_Commercial_Report/logs/launchd-cdp.err.log</string>
+</dict>
+</plist>

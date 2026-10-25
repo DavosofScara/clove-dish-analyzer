@@ -15,25 +15,47 @@ from .config import (
 )
 logger = logging.getLogger(__name__)
 
+# Reject corrupt Excel / openpyxl datetimes (e.g. year 0202) that break pandas ns timestamps.
+_MIN_BUSINESS_YEAR = 1990
+_MAX_BUSINESS_YEAR = 2100
+
+
+def _normalize_parsed_timestamp(ts) -> pd.Timestamp | pd.NaT:
+    if ts is None or pd.isna(ts):
+        return pd.NaT
+    try:
+        if not isinstance(ts, pd.Timestamp):
+            ts = pd.Timestamp(ts)
+    except (ValueError, OverflowError, TypeError, pd.errors.OutOfBoundsDatetime):
+        return pd.NaT
+    if pd.isna(ts):
+        return pd.NaT
+    year = int(ts.year)
+    if year < _MIN_BUSINESS_YEAR or year > _MAX_BUSINESS_YEAR:
+        return pd.NaT
+    return ts
+
 
 def parse_excel_date(value) -> pd.Timestamp | pd.NaT:
     if pd.isna(value):
         return pd.NaT
     if isinstance(value, (int, float)):
         try:
-            return pd.to_datetime(value, unit="d", origin="1899-12-30")
+            return _normalize_parsed_timestamp(
+                pd.to_datetime(value, unit="d", origin="1899-12-30")
+            )
         except Exception:
             return pd.NaT
     if isinstance(value, str):
         s = value.strip()
         if not s:
             return pd.NaT
-        try:
-            return pd.to_datetime(s, dayfirst=True, errors="coerce")
-        except Exception:
-            return pd.NaT
+        return _normalize_parsed_timestamp(pd.to_datetime(s, dayfirst=True, errors="coerce"))
     if isinstance(value, (datetime, pd.Timestamp, date)):
-        return pd.to_datetime(value)
+        try:
+            return _normalize_parsed_timestamp(pd.to_datetime(value))
+        except (ValueError, OverflowError, pd.errors.OutOfBoundsDatetime):
+            return pd.NaT
     return pd.NaT
 
 
@@ -106,7 +128,19 @@ def load_excel_data() -> pd.DataFrame:
     for col_name in ["Date_Demande", "Date_opération"]:
         actual = get_ci_column(df, col_name)
         if actual:
-            df[actual] = df[actual].apply(parse_excel_date)
+            raw = df[actual]
+            parsed = raw.apply(parse_excel_date)
+            n_bad = int((parsed.isna() & raw.notna()).sum())
+            if n_bad:
+                logger.warning(
+                    "Column %s: %d value(s) could not be parsed as a business date "
+                    "(year %d–%d); treated as empty.",
+                    col_name,
+                    n_bad,
+                    _MIN_BUSINESS_YEAR,
+                    _MAX_BUSINESS_YEAR,
+                )
+            df[actual] = parsed
         else:
             logger.warning("Date column %s not found in sheet.", col_name)
 
@@ -179,6 +213,7 @@ def load_marge_reelle_devis() -> pd.DataFrame:
 
     column_map = {
         "CDP": _resolve_column(df, "CDP"),
+        "CLIENT_ID": _resolve_column(df, "CLIENT_ID"),
         "PDV_DEVIS": _resolve_column(df, "PDV_DEVIS", "PDV_DEVIS_CONFIRME"),
         "MARGE_EVENTS_REELLE": _resolve_column(
             df, "MARGE_EVENTS_REELLE", "MARGE_EVENTS_REEL"
@@ -197,8 +232,15 @@ def load_marge_reelle_devis() -> pd.DataFrame:
             f"Found: {cols}"
         )
 
-    out = df[[column_map[k] for k in required_keys]].copy()
+    out_cols = [column_map[k] for k in required_keys]
+    out = df[out_cols].copy()
     out.columns = required_keys
+
+    if column_map.get("CLIENT_ID"):
+        out["CLIENT_ID"] = normalize_str_series(df[column_map["CLIENT_ID"]])
+    else:
+        out["CLIENT_ID"] = ""
+        logger.warning("CLIENT_ID missing on %s; site-level margin joins may be incomplete", MARGE_REELLE_SHEET_NAME)
 
     out["CDP"] = normalize_str_series(out["CDP"])
     for col in ("PDV_DEVIS", "MARGE_EVENTS_REELLE", "MARGE_EVENTS_FINAL_BUDGET"):
@@ -206,7 +248,7 @@ def load_marge_reelle_devis() -> pd.DataFrame:
 
     date_src = column_map.get("Date_opération")
     if date_src:
-        out["Date_opération"] = pd.to_datetime(df[date_src], errors="coerce", dayfirst=True)
+        out["Date_opération"] = df[date_src].apply(parse_excel_date)
     else:
         logger.warning(
             "Date_opération column missing on %s; period filters for margin charts will fail",
